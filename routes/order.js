@@ -1,6 +1,6 @@
 // routes/order.js
 const express = require('express')
-const { Order, OrderItem, Item } = require('../models')
+const { Order, OrderItem, Item, ItemImage } = require('../models')
 const { isLoggedIn } = require('./middlewares')
 
 const router = express.Router()
@@ -72,11 +72,25 @@ router.get('/', isLoggedIn, async (req, res) => {
          include: [
             {
                model: Item,
+               attributes: ['id', 'itemNm', 'price'],
                through: { attributes: ['orderPrice', 'count'] },
+               include: [
+                  {
+                     model: ItemImage,
+                     attributes: ['id', 'oriImgName', 'imgUrl'],
+                     where: { repImgYn: 'Y' },
+                     required: false,
+                  },
+               ],
             },
          ],
       })
-      res.json(orders)
+
+      res.status(200).json({
+         success: true,
+         message: '주문목록 조회 성공',
+         orders,
+      })
    } catch (err) {
       console.error(err)
       res.status(500).json({ message: '서버 오류', error: err })
