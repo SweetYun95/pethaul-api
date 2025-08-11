@@ -106,6 +106,7 @@ router.get('/check', (req, res) => {
             email: req.user.email,
             name: req.user.name,
             role: req.user.role,
+            provider: req.user.provider,
          },
       })
    } else {
@@ -136,5 +137,20 @@ router.get(
       res.redirect(`${process.env.CLIENT_URL}/google-success`)
    }
 )
+
+// ✅ 구글 로그인 상태 체크
+router.get('/googlecheck', (req, res) => {
+   if (req.isAuthenticated() && req.user.provider === 'google') {
+      return res.status(200).json({
+         googleAuthenticated: true,
+         user: req.user,
+      });
+   } else {
+      return res.status(200).json({
+         googleAuthenticated: false,
+      });
+   }
+});
+
 
 module.exports = router
