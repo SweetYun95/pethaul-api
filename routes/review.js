@@ -64,7 +64,7 @@ router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
 })
 
 //리뷰 수정하기
-router.put('/:id', isLoggedIn, upload.array('img'), async (req, res, next) => {
+router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) => {
    try {
       const { itemId, reviewDate, reviewContent, rating } = req.body
       const review = await Review.findByPk(req.params.id)
@@ -93,17 +93,17 @@ router.put('/:id', isLoggedIn, upload.array('img'), async (req, res, next) => {
       })
    } catch (error) {
       error.status = 500
+      console.error('[리뷰 수정 에러]', error)
       error.message = '리뷰 수정 중 오류가 발생했습니다.'
       next(error)
    }
 })
 //리뷰 삭제하기
 //회원이 작성한 리뷰 목록 불러오기
-router.get('/user/:userId', async (req, res, next) => {
+router.get('/', async (req, res, next) => {
    try {
-      const { userId } = req.params
       const review = await Review.findAll({
-         where: { userId },
+         where: { userId: req.user.id },
          include: [
             {
                model: Item,
