@@ -51,5 +51,6 @@ module.exports = class Pet extends Sequelize.Model {
          targetKey: 'id',
          onDelete: 'CASCADE',
       })
+      Pet.hasMany(db.PetImage, { foreignKey: 'petId', sourceKey: 'id', onDelete: 'CASCADE' })
    }
 }

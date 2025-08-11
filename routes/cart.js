@@ -57,23 +57,20 @@ router.post('/add', isLoggedIn, async (req, res) => {
 })
 
 //  장바구니 상품 수량 수정
-router.put('/update/:cartItemId', isLoggedIn, async (req, res) => {
+router.put('/update/:itemId', isLoggedIn, async (req, res) => {
+   const { itemId } = req.params
    const { count } = req.body
-   const { cartItemId } = req.params
-
    try {
-      const cartItem = await CartItem.findOne(cartItemId, {
-         include: {
-            model: Cart,
-            where: { userId: req.user.id },
-         },
-      })
+      const cart = await Cart.findOne({ where: { userId: req.user.id } })
+      if (!cart) return res.status(404).json({ message: '장바구니 없음' })
 
+      const cartItem = await CartItem.findOne({
+         where: { cartId: cart.id, itemId },
+      })
       if (!cartItem) return res.status(404).json({ message: '항목을 찾을 수 없습니다.' })
 
       cartItem.count = count
       await cartItem.save()
-
       res.json({ message: '수량이 수정되었습니다.' })
    } catch (err) {
       res.status(500).json({ message: '수정 실패' })
@@ -81,28 +78,20 @@ router.put('/update/:cartItemId', isLoggedIn, async (req, res) => {
 })
 
 // 장바구니 항목 삭제
-router.delete('/delete/:cartItemId', isLoggedIn, async (req, res) => {
-   const { cartItemId } = req.params
-
+router.delete('/delete/:itemId', isLoggedIn, async (req, res) => {
    try {
-      const cartItem = await CartItem.findOne({
-         where: { id: cartItemId },
-         include: {
-            model: Cart,
-            include: {
-               model: Item,
-            },
-            where: { userId: req.user.id },
-         },
+      const { itemId } = req.params
+      const cart = await Cart.findOne({ where: { userId: req.user.id } })
+      if (!cart) return res.status(404).json({ message: '장바구니 없음' })
+
+      const deleted = await CartItem.destroy({
+         where: { cartId: cart.id, itemId },
       })
 
-      if (!cartItem) return res.status(404).json({ message: '항목 없음' })
-
-      await cartItem.destroy()
+      if (!deleted) return res.status(404).json({ message: '항목 없음' })
       res.json({ message: '삭제 완료' })
    } catch (err) {
       res.status(500).json({ message: '삭제 실패' })
    }
 })
-
 module.exports = router
