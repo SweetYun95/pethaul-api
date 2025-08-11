@@ -38,7 +38,7 @@ router.post('/', verifyToken, isAdmin, upload.array('img'), async (req, res, nex
          error.status = 400
          return next(error)
       }
-      const { itemNm, price, stockNumber, itemDetail, itemSellStatus } = req.body
+      const { itemNm, price, stockNumber, itemDetail, itemSellStatus, itemSummary } = req.body
 
       let categories = []
       try {
@@ -55,6 +55,7 @@ router.post('/', verifyToken, isAdmin, upload.array('img'), async (req, res, nex
          stockNumber,
          itemDetail,
          itemSellStatus,
+         itemSummary,
       })
       // 이미지 insert
       const images = req.files.map((file) => ({
