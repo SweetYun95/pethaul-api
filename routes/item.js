@@ -150,7 +150,7 @@ router.get('/:id', verifyToken, async (req, res, next) => {
             },
             {
                model: Review,
-               attributes: ['id', 'reviewDate', 'reviewContent'],
+               attributes: ['id', 'reviewDate', 'reviewContent', 'rating'],
                include: [
                   {
                      model: ReviewImage,
