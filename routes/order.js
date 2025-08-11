@@ -75,6 +75,7 @@ router.get('/', isLoggedIn, async (req, res) => {
                through: { attributes: ['orderPrice', 'count'] },
             },
          ],
+         order: [['createdAt', 'DESC']],
       })
       res.json(orders)
    } catch (err) {
