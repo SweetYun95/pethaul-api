@@ -1,3 +1,4 @@
+// routes/auth.js
 const express = require('express')
 const bcrypt = require('bcrypt')
 const passport = require('passport')
@@ -144,13 +145,12 @@ router.get('/googlecheck', (req, res) => {
       return res.status(200).json({
          googleAuthenticated: true,
          user: req.user,
-      });
+      })
    } else {
       return res.status(200).json({
          googleAuthenticated: false,
-      });
+      })
    }
-});
-
+})
 
 module.exports = router
