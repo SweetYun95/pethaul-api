@@ -93,12 +93,25 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
       })
    } catch (error) {
       error.status = 500
-      console.error('[리뷰 수정 에러]', error)
       error.message = '리뷰 수정 중 오류가 발생했습니다.'
       next(error)
    }
 })
 //리뷰 삭제하기
+router.delete('/:id', async (req, res, next) => {
+   try {
+      const { id } = req.body
+      const review = await Review.findOne({
+         where: { id },
+      })
+      await review.destroy()
+      res.status(200).json({ success: true, message: '후기가 삭제되었습니다.' })
+   } catch (error) {
+      error.status = 500
+      error.message = '리뷰 삭제 중 오류가 발생했습니다.'
+      next(error)
+   }
+})
 //회원이 작성한 리뷰 목록 불러오기
 router.get('/', async (req, res, next) => {
    try {

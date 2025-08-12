@@ -31,11 +31,10 @@ module.exports = class petImage extends Sequelize.Model {
       )
    }
    static associate(db) {
-      petImage.belongsTo(db.User, {
+      petImage.belongsTo(db.Pet, {
          foreignKey: 'petId',
          targetKey: 'id',
          onDelete: 'CASCADE',
       })
-  
    }
 }
