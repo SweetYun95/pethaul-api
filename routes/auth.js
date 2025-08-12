@@ -35,7 +35,7 @@ router.post('/join', isNotLoggedIn, async (req, res) => {
          name,
          address,
          gender,
-         phone: phoneNumber, // 전화번호를 'phone' 필드로 저장
+         phoneNumber, // 전화번호를 'phone' 필드로 저장
       })
 
       res.status(201).json({ message: '회원가입 성공' })
