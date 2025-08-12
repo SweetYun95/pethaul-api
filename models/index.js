@@ -14,8 +14,9 @@ const ItemImage = require('./itemImage')
 const Review = require('./review')
 const ReviewImage = require('./reviewImage')
 const Pet = require('./pet')
+const PetImage = require('./petImage')
 const Domain = require('./domain')
-
+const petImage = require('./petImage')
 const db = {}
 const sequelize = new Sequelize(config.database, config.username, config.password, config)
 
@@ -33,6 +34,7 @@ db.ItemImage = ItemImage
 db.Review = Review
 db.ReviewImage = ReviewImage
 db.Pet = Pet
+db.PetImage = PetImage
 db.Domain = Domain
 
 User.init(sequelize)
@@ -48,6 +50,7 @@ Review.init(sequelize)
 ReviewImage.init(sequelize)
 Pet.init(sequelize)
 Domain.init(sequelize)
+petImage.init(sequelize)
 
 User.associate(db)
 Item.associate(db)
@@ -62,5 +65,6 @@ Review.associate(db)
 ReviewImage.associate(db)
 Pet.associate(db)
 Domain.associate(db)
+petImage.associate(db)
 
 module.exports = db
