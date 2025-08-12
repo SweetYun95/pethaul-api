@@ -1,3 +1,4 @@
+// pethaul-api/app.js
 const express = require('express')
 const path = require('path')
 const cookieParser = require('cookie-parser')
@@ -37,29 +38,30 @@ sequelize
    })
 
 //미들웨어 설정
-// app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec)) // http://localhost:8000/api-docs
 app.use(
    cors({
-      origin: process.env.FRONTEND_APP_URL,
-      credentials: true,
+      origin: process.env.FRONTEND_APP_URL, // 프론트엔드 URL
+      credentials: true, // 쿠키, 세션 인증 정보 전송 허용
    })
 )
 app.use(morgan('dev'))
 app.use(express.static(path.join(__dirname, 'uploads')))
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
-app.use(cookieParser(process.env.COOKIE_SECRET))
+app.use(cookieParser(process.env.COOKIE_SECRET)) // 쿠키 설정
 
-//세션 설정
+// 세션 설정
 const sessionMiddleware = session({
-   resave: false,
-   saveUninitialized: true,
-   secret: process.env.COOKIE_SECRET,
+   resave: false, // 세션이 변경되지 않으면 다시 저장하지 않음
+   saveUninitialized: false, // 세션이 초기화되지 않은 상태로 저장되지 않음
+   secret: process.env.COOKIE_SECRET, // 쿠키의 암호화 키
    cookie: {
-      httpOnly: true,
-      secure: false,
+      httpOnly: true, // 자바스크립트에서 쿠키 접근 불가
+      secure: process.env.NODE_ENV === 'production', // HTTPS에서는 true로 설정해야 함
+      maxAge: 1000 * 60 * 60 * 24, // 쿠키의 유효기간 (1일)
    },
 })
+
 app.use(sessionMiddleware)
 
 //Passport 초기화, 세션 연동

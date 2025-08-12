@@ -1,4 +1,4 @@
-// router/middlewares.js
+// routes/middlewares.js
 const jwt = require('jsonwebtoken')
 
 // 로그인 상태 확인 미들웨어: 사용자가 로그인된 상태인지 확인
