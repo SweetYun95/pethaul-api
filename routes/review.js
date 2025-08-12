@@ -125,7 +125,7 @@ router.get('/', async (req, res, next) => {
          include: [
             {
                model: Item,
-               attributes: ['id', 'itemNm'],
+               attributes: ['id', 'itemNm', 'price'],
                include: {
                   model: ItemImage,
                   attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn'],
