@@ -2,6 +2,7 @@
 const express = require('express')
 const { Order, OrderItem, Item, ItemImage, User } = require('../models')
 const { isLoggedIn, isAdmin } = require('./middlewares')
+const { col } = require('sequelize')
 
 const router = express.Router()
 
@@ -43,7 +44,7 @@ router.post('/', isLoggedIn, async (req, res) => {
             {
                orderId: order.id,
                itemId: item.itemId,
-               orderPrice: item.price,
+               orderPrice: item.price * item.quantity,
                count: item.quantity,
             },
             { transaction: t }
@@ -102,14 +103,14 @@ router.get('/all', isAdmin, async (req, res, next) => {
    try {
       console.log('🔥 /order/all 라우터 실행됨')
       const orders = await Order.findAll({
+         attributes: ['id', 'orderDate', 'orderStatus', [col('Items->OrderItem.orderPrice'), 'orderPrice'], [col('Items->OrderItem.count'), 'count'], [col('Items.itemNm'), 'itemNm'], [col('Items.price'), 'price'], [col('Items.id'), 'itemId']],
          include: [
             {
                model: Item,
-               attributes: ['itemNm', 'price'],
+               attributes: [],
                through: {
-                  attributes: ['orderPrice', 'count'],
+                  attributes: [],
                },
-               include: ItemImage,
             },
             {
                model: User,
@@ -126,7 +127,6 @@ router.get('/all', isAdmin, async (req, res, next) => {
       res.status(500).json({ message: '서버 오류', error: error })
    }
 })
-module.exports = router
 
 // 주문 상세 조회
 router.get('/:id', isLoggedIn, async (req, res) => {
@@ -211,3 +211,5 @@ router.patch('/:id', async (req, res, next) => {
       res.status(500).json({ message: '서버 오류', error: error })
    }
 })
+
+module.exports = router
