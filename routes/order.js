@@ -1,7 +1,7 @@
 // routes/order.js
 const express = require('express')
-const { Order, OrderItem, Item, ItemImage } = require('../models')
-const { isLoggedIn } = require('./middlewares')
+const { Order, OrderItem, Item, ItemImage, User } = require('../models')
+const { isLoggedIn, isAdmin } = require('./middlewares')
 
 const router = express.Router()
 
@@ -97,6 +97,37 @@ router.get('/', isLoggedIn, async (req, res) => {
    }
 })
 
+// 전체 주문 조회(관리자용)
+router.get('/all', isAdmin, async (req, res, next) => {
+   try {
+      console.log('🔥 /order/all 라우터 실행됨')
+      const orders = await Order.findAll({
+         include: [
+            {
+               model: Item,
+               attributes: ['itemNm', 'price'],
+               through: {
+                  attributes: ['orderPrice', 'count'],
+               },
+               include: ItemImage,
+            },
+            {
+               model: User,
+               attributes: ['id', 'userId', 'name', 'address'],
+            },
+         ],
+      })
+      if (!orders) {
+         return res.status(404).json({ message: '주문을 찾을 수 없습니다.' })
+      }
+      res.json({ orders })
+   } catch (error) {
+      console.error(error)
+      res.status(500).json({ message: '서버 오류', error: error })
+   }
+})
+module.exports = router
+
 // 주문 상세 조회
 router.get('/:id', isLoggedIn, async (req, res) => {
    try {
@@ -159,4 +190,24 @@ router.patch('/:id/cancel', isLoggedIn, async (req, res) => {
    }
 })
 
-module.exports = router
+//주문 상태 변경(배송 준비중 등)
+router.patch('/:id', async (req, res, next) => {
+   try {
+      const newStatus = req.query.status
+
+      const order = await Order.findOne({
+         where: {
+            id: req.params.id,
+         },
+      })
+      if (!order) {
+         return res.status(404).json({ message: '주문을 찾을 수 없습니다.' })
+      }
+      order.orderStatus = newStatus
+      await order.save()
+      res.json({ message: `주문 상태가 ${req.query.status}로 변경되었습니다.` })
+   } catch (error) {
+      console.error(error)
+      res.status(500).json({ message: '서버 오류', error: error })
+   }
+})
