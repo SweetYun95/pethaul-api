@@ -1,4 +1,4 @@
-// models/user.js
+// modules/user.js
 const Sequelize = require('sequelize')
 
 module.exports = class User extends Sequelize.Model {
@@ -33,6 +33,10 @@ module.exports = class User extends Sequelize.Model {
                type: Sequelize.ENUM('ADMIN', 'USER'),
                allowNull: false,
                defaultValue: 'USER',
+            },
+            phoneNumber: {
+               type: Sequelize.STRING(20),
+               allowNull: true, // 새로 추가된 필드이므로 기존 데이터에 NULL 값이 들어갈 수 있음
             },
             email: {
                type: Sequelize.STRING(100),

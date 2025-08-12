@@ -9,15 +9,25 @@ const router = express.Router()
 
 // 회원가입
 router.post('/join', isNotLoggedIn, async (req, res) => {
-   const { email, password, name, userId, address, gender } = req.body
+   const { email, password, name, userId, address, gender, phoneNumber } = req.body
 
    try {
+      // 이메일 중복 확인
       const exUser = await User.findOne({ where: { email } })
       if (exUser) {
          return res.status(409).json({ message: '이미 가입된 이메일입니다.' })
       }
 
+      // 전화번호 중복 확인
+      const exPhone = await User.findOne({ where: { phoneNumber } })
+      if (exPhone) {
+         return res.status(409).json({ message: '이미 사용 중인 전화번호입니다.' })
+      }
+
+      // 비밀번호 암호화
       const hash = await bcrypt.hash(password, 12)
+
+      // 사용자 생성
       await User.create({
          userId,
          email,
@@ -25,6 +35,7 @@ router.post('/join', isNotLoggedIn, async (req, res) => {
          name,
          address,
          gender,
+         phone: phoneNumber, // 전화번호를 'phone' 필드로 저장
       })
 
       res.status(201).json({ message: '회원가입 성공' })
@@ -134,7 +145,6 @@ router.get(
    }),
    (req, res) => {
       // 로그인 성공 시 프론트로 리다이렉트
-      // 실제 프론트 도메인에 맞게 수정할 것
       res.redirect(`${process.env.CLIENT_URL}/google-success`)
    }
 )
