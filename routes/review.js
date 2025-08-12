@@ -100,14 +100,19 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
 //리뷰 삭제하기
 router.delete('/:id', async (req, res, next) => {
    try {
-      const { id } = req.body
+      const { id } = req.params
+      console.log('🎈review.js id:', id)
       const review = await Review.findOne({
          where: { id },
       })
+      console.log('🎈review.js review:', review)
+
       await review.destroy()
       res.status(200).json({ success: true, message: '후기가 삭제되었습니다.' })
    } catch (error) {
       error.status = 500
+      console.log('🎈reivew.js error:', error)
+
       error.message = '리뷰 삭제 중 오류가 발생했습니다.'
       next(error)
    }
@@ -120,7 +125,7 @@ router.get('/', async (req, res, next) => {
          include: [
             {
                model: Item,
-               attributes: ['id', 'itemNm'],
+               attributes: ['id', 'itemNm', 'price'],
                include: {
                   model: ItemImage,
                   attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn'],
