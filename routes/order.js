@@ -146,8 +146,6 @@ router.get('/all/admin', async (req, res, next) => {
             [col('Items.id'), 'itemId'],
             [col('Items->ItemImages.imgUrl'), 'itemImgUrl'],
             [fn('COUNT', fn('DISTINCT', col('Order.id'))), 'orderCount'], // 주문 건수
-            [fn('SUM', col('Items->OrderItem.count')), 'salesQty'], // 판매 수량
-            [fn('SUM', col('Items->OrderItem.orderPrice')), 'salesAmount'], // 매출액
          ],
 
          include: [
