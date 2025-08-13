@@ -86,6 +86,8 @@ router.post('/login', isNotLoggedIn, (req, res, next) => {
                email: user.email,
                name: user.name,
                role: user.role,
+               provider: user.provider,
+               phoneNumber: user.phoneNumber, // ✅ 추가
             },
          })
       })
@@ -119,12 +121,11 @@ router.get('/check', (req, res) => {
             name: req.user.name,
             role: req.user.role,
             provider: req.user.provider,
+            phoneNumber: req.user.phoneNumber, // ✅ 추가
          },
       })
    } else {
-      res.status(200).json({
-         isAuthenticated: false,
-      })
+      res.status(200).json({ isAuthenticated: false })
    }
 })
 
@@ -154,12 +155,18 @@ router.get('/googlecheck', (req, res) => {
    if (req.isAuthenticated() && req.user.provider === 'google') {
       return res.status(200).json({
          googleAuthenticated: true,
-         user: req.user,
+         user: {
+            id: req.user.id,
+            userId: req.user.userId,
+            email: req.user.email,
+            name: req.user.name,
+            role: req.user.role,
+            provider: req.user.provider,
+            phoneNumber: req.user.phoneNumber, // ✅ 추가
+         },
       })
    } else {
-      return res.status(200).json({
-         googleAuthenticated: false,
-      })
+      return res.status(200).json({ googleAuthenticated: false })
    }
 })
 
