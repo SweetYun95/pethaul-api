@@ -99,11 +99,56 @@ router.get('/', isLoggedIn, async (req, res) => {
 })
 
 // 전체 주문 조회(관리자용)
-router.get('/all/admin', isAdmin, async (req, res, next) => {
+
+router.get('/all/admin', async (req, res, next) => {
    try {
-      console.log('🔥 /order/all 라우터 실행됨')
+      const sort = req.query.sort || 'orderDate'
+      let orderClause = [['orderDate', 'DESC']]
+      let group
+      let whereClause = {}
+
+      if (sort === 'salesCount') {
+         //전체 판매량순
+         orderClause = [[fn('SUM', col('Items->OrderItem.count')), 'DESC']]
+         group = ['Items.id']
+      } else if (sort === 'orderDate') {
+         //최근 주문 많은 순
+         orderClause = [[fn('COUNT', col('Items->OrderItem.count')), 'DESC']]
+         group = ['Items.id']
+
+         // 최근 1개월 조건
+         const oneMonthAgo = new Date()
+         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+         whereClause.orderDate = { [Op.between]: [oneMonthAgo, new Date()] }
+      } else if (sort === 'yesterday') {
+         //전일자 주문 조회
+         const yesterday = new Date()
+         yesterday.setDate(yesterday.getDate() - 1)
+
+         const startOfYesterday = new Date(yesterday.setHours(0, 0, 0, 0))
+         const endOfYesterday = new Date(yesterday.setHours(23, 59, 59, 999))
+
+         whereClause.orderDate = {
+            [Op.between]: [startOfYesterday, endOfYesterday],
+         }
+      }
+
       const orders = await Order.findAll({
-         attributes: ['id', 'orderDate', 'orderStatus', [col('Items->OrderItem.orderPrice'), 'orderPrice'], [col('Items->OrderItem.count'), 'count'], [col('Items.itemNm'), 'itemNm'], [col('Items.price'), 'price'], [col('Items.id'), 'itemId'], [col('Items->ItemImages.imgUrl'), 'itemImgUrl']],
+         where: whereClause,
+         attributes: [
+            'id',
+            'orderDate',
+            'orderStatus',
+            [col('Items->OrderItem.orderPrice'), 'orderPrice'],
+            [col('Items->OrderItem.count'), 'count'],
+            [col('Items.itemNm'), 'itemNm'],
+            [col('Items.price'), 'price'],
+            [col('Items.id'), 'itemId'],
+            [col('Items->ItemImages.imgUrl'), 'itemImgUrl'],
+            [fn('COUNT', fn('DISTINCT', col('Order.id'))), 'orderCount'], // 주문 건수
+            [fn('SUM', col('Items->OrderItem.count')), 'salesQty'], // 판매 수량
+            [fn('SUM', col('Items->OrderItem.orderPrice')), 'salesAmount'], // 매출액
+         ],
 
          include: [
             {
@@ -120,14 +165,12 @@ router.get('/all/admin', isAdmin, async (req, res, next) => {
                   },
                ],
             },
-            {
-               model: User,
-               attributes: ['id', 'userId', 'name', 'address'],
-            },
          ],
+         order: orderClause,
+         group: ['Items.id', 'Order.id', 'Order.orderDate', 'Order.orderStatus', 'Items.itemNm', 'Items.price', 'Items->OrderItem.orderPrice', 'Items->OrderItem.count', 'Items->ItemImages.imgUrl'],
       })
-      if (!orders) {
-         return res.status(404).json({ message: '주문을 찾을 수 없습니다.' })
+      if (!orders.length) {
+         return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' })
       }
       res.json({ orders })
    } catch (error) {
