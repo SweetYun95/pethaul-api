@@ -23,9 +23,9 @@ const upload = multer({
          cb(null, 'uploads/')
       },
       filename(req, file, cb) {
-         const decoded = decodeURIComponent(file.originalname)
-         const ext = path.extname(decoded)
-         const basename = path.basename(decoded, ext)
+         const decodeFileName = decodeURIComponent(file.originalname)
+         const ext = path.extname(decodeFileName)
+         const basename = path.basename(decodeFileName, ext)
          cb(null, basename + Date.now() + ext)
       },
    }),
@@ -39,6 +39,8 @@ const upload = multer({
 router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
    const t = await sequelize.transaction()
    try {
+      console.log('파일정보:', req.file)
+      console.log('formData:', req.body)
       const { petName, petType, breed, gender } = req.body
       const age = Number(req.body.age ?? 0)
 
@@ -50,7 +52,7 @@ router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
       if (req.files?.length > 0) {
          petImages = req.files.map((file, idx) => ({
             oriImgName: file.originalname, // 컬럼명에 맞게 조정
-            imgUrl: `/uploads/${file.filename}`, // 프로젝트 컬럼이 url이면 url로 변경
+            imgUrl: `/${file.filename}`, // 프로젝트 컬럼이 url이면 url로 변경
             petId: pet.id,
          }))
          await PetImage.bulkCreate(petImages, { transaction: t })
@@ -98,10 +100,8 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
          await PetImage.destroy({ where: { petId: pet.id } })
          const petImages = req.files.map((file, idx) => ({
             oriImgName: file.originalname,
-            imgUrl: `/uploads/${file.filename}`,
+            imgUrl: `/${file.filename}`,
             petId: pet.id,
-            isPrimary: idx === 0,
-            sortOrder: idx,
          }))
          await PetImage.bulkCreate(petImages)
       }
@@ -148,23 +148,20 @@ router.delete('/:id', isLoggedIn, async (req, res, next) => {
  */
 router.get('/', isLoggedIn, async (req, res, next) => {
    try {
+      console.log('🎈req.user.id:', req.user.id)
       const pets = await Pet.findAll({
          where: { userId: req.user.id },
          include: [
             {
                model: PetImage,
                as: 'images',
-               attributes: ['id', 'oriImgName', 'imgUrl', 'isPrimary', 'sortOrder'],
+               attributes: ['id', 'oriImgName', 'imgUrl'],
                separate: true,
-               order: [
-                  ['isPrimary', 'DESC'],
-                  ['sortOrder', 'ASC'],
-                  ['id', 'ASC'],
-               ],
             },
          ],
          order: [['createdAt', 'DESC']],
       })
+      console.log('🎈pets:', pets)
 
       res.status(200).json({
          success: true,
@@ -173,6 +170,7 @@ router.get('/', isLoggedIn, async (req, res, next) => {
       })
    } catch (error) {
       error.status = 500
+      console.log('🎈에러 원본:', error)
       error.message = '데이터를 불러오는 중 오류가 발생했습니다.'
       next(error)
    }
