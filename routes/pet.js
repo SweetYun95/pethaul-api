@@ -50,9 +50,8 @@ router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
       if (req.files?.length > 0) {
          petImages = req.files.map((file, idx) => ({
             oriImgName: file.originalname, // 컬럼명에 맞게 조정
-            imgUrl: `/${file.filename}`, // 프로젝트 컬럼이 url이면 url로 변경
+            imgUrl: `/uploads/${file.filename}`, // 프로젝트 컬럼이 url이면 url로 변경
             petId: pet.id,
-
          }))
          await PetImage.bulkCreate(petImages, { transaction: t })
       }
@@ -99,7 +98,7 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
          await PetImage.destroy({ where: { petId: pet.id } })
          const petImages = req.files.map((file, idx) => ({
             oriImgName: file.originalname,
-            imgUrl: `/${file.filename}`,
+            imgUrl: `/uploads/${file.filename}`,
             petId: pet.id,
             isPrimary: idx === 0,
             sortOrder: idx,
@@ -154,6 +153,7 @@ router.get('/', isLoggedIn, async (req, res, next) => {
          include: [
             {
                model: PetImage,
+               as: 'images',
                attributes: ['id', 'oriImgName', 'imgUrl', 'isPrimary', 'sortOrder'],
                separate: true,
                order: [
