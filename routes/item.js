@@ -235,20 +235,20 @@ router.put('/:id', verifyToken, isAdmin, upload.array('img'), async (req, res, n
 /**
  * 5. 상품 삭제
  */
-router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
-   try {
-      const item = await Item.findByPk(req.params.id)
-      if (!item) {
-         const error = new Error('상품을 찾을 수 없습니다.')
-         error.status = 404
-         return next(error)
-      }
-      await item.destroy()
-      res.json({ success: true, message: '상품이 삭제되었습니다.' })
-   } catch (error) {
-      error.status = 500
-      error.message = '상품 삭제 실패'
-      next(error)
-   }
-})
+// router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
+//    try {
+//       const item = await Item.findByPk(req.params.id)
+//       if (!item) {
+//          const error = new Error('상품을 찾을 수 없습니다.')
+//          error.status = 404
+//          return next(error)
+//       }
+//       await item.destroy()
+//       res.json({ success: true, message: '상품이 삭제되었습니다.' })
+//    } catch (error) {
+//       error.status = 500
+//       error.message = '상품 삭제 실패'
+//       next(error)
+//    }
+// })
 module.exports = router
