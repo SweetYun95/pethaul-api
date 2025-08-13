@@ -36,6 +36,7 @@ db.ReviewImage = ReviewImage
 db.Pet = Pet
 db.PetImage = PetImage
 db.Domain = Domain
+db.PetImage = PetImage
 
 User.init(sequelize)
 Item.init(sequelize)
