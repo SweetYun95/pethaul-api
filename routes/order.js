@@ -2,6 +2,7 @@
 const express = require('express')
 const { Order, OrderItem, Item, ItemImage, User } = require('../models')
 const { isLoggedIn, isAdmin } = require('./middlewares')
+const { Op, col, fn } = require('sequelize')
 
 const router = express.Router()
 
@@ -43,7 +44,7 @@ router.post('/', isLoggedIn, async (req, res) => {
             {
                orderId: order.id,
                itemId: item.itemId,
-               orderPrice: item.price,
+               orderPrice: item.price * item.quantity,
                count: item.quantity,
             },
             { transaction: t }
@@ -98,18 +99,26 @@ router.get('/', isLoggedIn, async (req, res) => {
 })
 
 // 전체 주문 조회(관리자용)
-router.get('/all', isAdmin, async (req, res, next) => {
+router.get('/all/admin', isAdmin, async (req, res, next) => {
    try {
       console.log('🔥 /order/all 라우터 실행됨')
       const orders = await Order.findAll({
+         attributes: ['id', 'orderDate', 'orderStatus', [col('Items->OrderItem.orderPrice'), 'orderPrice'], [col('Items->OrderItem.count'), 'count'], [col('Items.itemNm'), 'itemNm'], [col('Items.price'), 'price'], [col('Items.id'), 'itemId'], [col('Items->ItemImages.imgUrl'), 'itemImgUrl']],
+
          include: [
             {
                model: Item,
-               attributes: ['itemNm', 'price'],
+               attributes: [],
                through: {
-                  attributes: ['orderPrice', 'count'],
+                  attributes: [],
                },
-               include: ItemImage,
+               include: [
+                  {
+                     model: ItemImage,
+                     attributes: [],
+                     required: false,
+                  },
+               ],
             },
             {
                model: User,
@@ -126,7 +135,62 @@ router.get('/all', isAdmin, async (req, res, next) => {
       res.status(500).json({ message: '서버 오류', error: error })
    }
 })
-module.exports = router
+
+// 회원 조회용 주문데이터(베스트셀러 정렬 등)
+router.get('/all/main', async (req, res, next) => {
+   try {
+      const sort = req.query.sort || 'orderDate'
+      let orderClause = [['orderDate', 'DESC']]
+      let group
+      let whereClause = {}
+
+      if (sort === 'salesCount') {
+         //전체 판매량순
+         orderClause = [[fn('SUM', col('Items->OrderItem.count')), 'DESC']]
+         group = ['Items.id']
+      } else if (sort === 'orderDate') {
+         //최근 주문 많은 순
+         orderClause = [[fn('COUNT', col('Items->OrderItem.count')), 'DESC']]
+         group = ['Items.id']
+
+         // 최근 1개월 조건
+         const oneMonthAgo = new Date()
+         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+         whereClause.orderDate = { [Op.between]: [oneMonthAgo, new Date()] }
+      }
+
+      const orders = await Order.findAll({
+         where: whereClause,
+         attributes: ['id', 'orderDate', 'orderStatus', [col('Items->OrderItem.orderPrice'), 'orderPrice'], [col('Items->OrderItem.count'), 'count'], [col('Items.itemNm'), 'itemNm'], [col('Items.price'), 'price'], [col('Items.id'), 'itemId'], [col('Items->ItemImages.imgUrl'), 'itemImgUrl']],
+
+         include: [
+            {
+               model: Item,
+               attributes: [],
+               through: {
+                  attributes: [],
+               },
+               include: [
+                  {
+                     model: ItemImage,
+                     attributes: [],
+                     required: false,
+                  },
+               ],
+            },
+         ],
+         order: orderClause,
+         group: ['Items.id', 'Order.id', 'Order.orderDate', 'Order.orderStatus', 'Items.itemNm', 'Items.price', 'Items->OrderItem.orderPrice', 'Items->OrderItem.count', 'Items->ItemImages.imgUrl'],
+      })
+      if (!orders.length) {
+         return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' })
+      }
+      res.json({ orders })
+   } catch (error) {
+      console.error(error)
+      res.status(500).json({ message: '서버 오류', error: error })
+   }
+})
 
 // 주문 상세 조회
 router.get('/:id', isLoggedIn, async (req, res) => {
@@ -211,3 +275,5 @@ router.patch('/:id', async (req, res, next) => {
       res.status(500).json({ message: '서버 오류', error: error })
    }
 })
+
+module.exports = router
