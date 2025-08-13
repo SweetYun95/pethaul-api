@@ -155,7 +155,7 @@ router.get('/', isLoggedIn, async (req, res, next) => {
             {
                model: PetImage,
                as: 'images',
-               attributes: ['id', 'oriImgName', 'imgUrl'],
+               attributes: ['id', 'oriImgName', 'imgUrl', ],
                separate: true,
             },
          ],
