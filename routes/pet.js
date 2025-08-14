@@ -8,6 +8,19 @@ const { isLoggedIn } = require('./middlewares')
 
 const router = express.Router()
 
+// 📌 한글 파일명 복구 함수
+function decodeOriginalName(raw) {
+   const utf8 = Buffer.from(raw, 'latin1').toString('utf8')
+   if (/%[0-9A-Fa-f]{2}/.test(utf8)) {
+      try {
+         return decodeURIComponent(utf8)
+      } catch {
+         /* 무시 */
+      }
+   }
+   return utf8
+}
+
 // uploads 폴더 준비
 try {
    fs.readdirSync('uploads')
@@ -51,7 +64,7 @@ router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
       let petImages = []
       if (req.files?.length > 0) {
          petImages = req.files.map((file, idx) => ({
-            oriImgName: file.originalname, // 컬럼명에 맞게 조정
+            oriImgName: decodeOriginalName(file.originalname), // 컬럼명에 맞게 조정
             imgUrl: `/${file.filename}`, // 프로젝트 컬럼이 url이면 url로 변경
             petId: pet.id,
          }))
@@ -99,7 +112,7 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
       if (req.files && req.files.length > 0) {
          await PetImage.destroy({ where: { petId: pet.id } })
          const petImages = req.files.map((file, idx) => ({
-            oriImgName: file.originalname,
+            oriImgName: decodeOriginalName(file.originalname),
             imgUrl: `/${file.filename}`,
             petId: pet.id,
          }))
@@ -155,7 +168,7 @@ router.get('/', isLoggedIn, async (req, res, next) => {
             {
                model: PetImage,
                as: 'images',
-               attributes: ['id', 'oriImgName', 'imgUrl', ],
+               attributes: ['id', 'oriImgName', 'imgUrl'],
                separate: true,
             },
          ],
