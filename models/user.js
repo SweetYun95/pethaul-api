@@ -72,5 +72,6 @@ module.exports = class User extends Sequelize.Model {
       User.hasOne(db.Cart, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
       User.hasMany(db.Review, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
       User.hasMany(db.Pet, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
+       User.hasMany(db.Like, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
    }
 }
