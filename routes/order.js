@@ -180,9 +180,9 @@ router.get('/all/admin', async (req, res, next) => {
 // 회원 조회용 주문데이터(베스트셀러 정렬 등)
 router.get('/all/main', async (req, res, next) => {
    try {
-      const limit = Number(req.query.limit) || 5
+      const limit = Number(req.query.limit)
       console.log('🎈🎈limit:', limit)
-      // 1. 전체 판매량 TOP 5
+      // 1. 전체 판매량 기준
       const topSales = await Item.findAll({
          attributes: [
             ['id', 'itemId'],
@@ -206,17 +206,17 @@ router.get('/all/main', async (req, res, next) => {
          ],
          group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
          order: [[fn('SUM', col('Orders->OrderItem.count')), 'DESC']],
-         limit,
+         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
          subQuery: false,
       })
 
-      // console.log('🎈topSales:', topSales)
+      console.log('🎈topSales:', topSales)
 
       // 오늘 날짜 00:00 기준
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
-      // 2. 오늘 주문 건수 TOP 5
+      // 2. 오늘 주문 건수
       const topToday = await Item.findAll({
          attributes: [
             ['id', 'itemId'],
@@ -246,12 +246,12 @@ router.get('/all/main', async (req, res, next) => {
          ],
          group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
          order: [['orderCount', 'DESC']],
-         limit,
+         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
          subQuery: false,
       })
       // console.log('🎈today:', topToday)
 
-      // 3. 최신 등록 상품 TOP 5
+      // 3. 최신 등록 상품
       const newItems = await Item.findAll({
          attributes: ['id', 'itemNm', 'price', 'createdAt', [col('ItemImages.imgUrl'), 'itemImgUrl']],
          include: [
@@ -263,7 +263,7 @@ router.get('/all/main', async (req, res, next) => {
             },
          ],
          order: [['createdAt', 'DESC']],
-         limit,
+         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
          raw: false,
          subQuery: false,
       })
