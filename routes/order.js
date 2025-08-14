@@ -180,56 +180,103 @@ router.get('/all/admin', async (req, res, next) => {
 // 회원 조회용 주문데이터(베스트셀러 정렬 등)
 router.get('/all/main', async (req, res, next) => {
    try {
-      const sort = req.query.sort || 'orderDate'
-      let orderClause = [['orderDate', 'DESC']]
-      let group
-      let whereClause = {}
-
-      if (sort === 'salesCount') {
-         //전체 판매량순
-         orderClause = [[fn('SUM', col('Items->OrderItem.count')), 'DESC']]
-         group = ['Items.id']
-      } else if (sort === 'orderDate') {
-         //최근 주문 많은 순
-         orderClause = [[fn('COUNT', col('Items->OrderItem.count')), 'DESC']]
-         group = ['Items.id']
-
-         // 최근 1개월 조건
-         const oneMonthAgo = new Date()
-         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
-         whereClause.orderDate = { [Op.between]: [oneMonthAgo, new Date()] }
-      }
-
-      const orders = await Order.findAll({
-         where: whereClause,
-         attributes: ['id', 'orderDate', 'orderStatus', [col('Items->OrderItem.orderPrice'), 'orderPrice'], [col('Items->OrderItem.count'), 'count'], [col('Items.itemNm'), 'itemNm'], [col('Items.price'), 'price'], [col('Items.id'), 'itemId'], [col('Items->ItemImages.imgUrl'), 'itemImgUrl']],
-
+      const limit = Number(req.query.limit) || 5
+      console.log('🎈🎈limit:', limit)
+      // 1. 전체 판매량 TOP 5
+      const topSales = await Item.findAll({
+         attributes: [
+            ['id', 'itemId'],
+            ['itemNm', 'itemNm'],
+            ['price', 'price'],
+            [fn('SUM', col('Orders->OrderItem.count')), 'totalCount'], // 총 판매 수량
+            [col('ItemImages.imgUrl'), 'itemImgUrl'],
+         ],
          include: [
             {
-               model: Item,
+               model: Order,
                attributes: [],
-               through: {
-                  attributes: [],
-               },
+               through: { attributes: [] },
+            },
+            {
+               model: ItemImage,
+               attributes: [],
+               required: false,
+               where: { repImgYn: 'Y' },
+            },
+         ],
+         group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
+         order: [[fn('SUM', col('Orders->OrderItem.count')), 'DESC']],
+         limit,
+         subQuery: false,
+      })
+
+      // console.log('🎈topSales:', topSales)
+
+      // 오늘 날짜 00:00 기준
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      // 2. 오늘 주문 건수 TOP 5
+      const topToday = await Item.findAll({
+         attributes: [
+            ['id', 'itemId'],
+            ['itemNm', 'itemNm'],
+            ['price', 'price'],
+            [fn('COUNT', fn('DISTINCT', col('OrderItems.orderId'))), 'orderCount'],
+            [col('ItemImages.imgUrl'), 'itemImgUrl'],
+         ],
+         include: [
+            {
+               model: OrderItem,
+               attributes: [],
                include: [
                   {
-                     model: ItemImage,
+                     model: Order,
                      attributes: [],
-                     required: false,
+                     where: { orderDate: { [Op.gte]: today } },
                   },
                ],
             },
+            {
+               model: ItemImage,
+               attributes: [],
+               required: false,
+               where: { repImgYn: 'Y' },
+            },
          ],
-         order: orderClause,
-         group: ['Items.id', 'Order.id', 'Order.orderDate', 'Order.orderStatus', 'Items.itemNm', 'Items.price', 'Items->OrderItem.orderPrice', 'Items->OrderItem.count', 'Items->ItemImages.imgUrl'],
+         group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
+         order: [['orderCount', 'DESC']],
+         limit,
+         subQuery: false,
       })
-      if (!orders.length) {
-         return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' })
-      }
-      res.json({ orders })
+      // console.log('🎈today:', topToday)
+
+      // 3. 최신 등록 상품 TOP 5
+      const newItems = await Item.findAll({
+         attributes: ['id', 'itemNm', 'price', 'createdAt', [col('ItemImages.imgUrl'), 'itemImgUrl']],
+         include: [
+            {
+               model: ItemImage,
+               attributes: [],
+               required: false,
+               where: { repImgYn: 'Y' }, // 대표이미지 필터까지 가능
+            },
+         ],
+         order: [['createdAt', 'DESC']],
+         limit,
+         raw: false,
+         subQuery: false,
+      })
+      // console.log('🎈newItems:', newItems)
+
+      res.json({
+         topSales,
+         topToday,
+         newItems,
+      })
    } catch (error) {
       console.error(error)
-      res.status(500).json({ message: '서버 오류', error: error })
+      res.status(500).json({ message: '서버 오류', error })
    }
 })
 
