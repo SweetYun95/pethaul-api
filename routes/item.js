@@ -98,14 +98,28 @@ router.post('/', verifyToken, isAdmin, upload.array('img'), async (req, res, nex
 router.get('/', verifyToken, async (req, res, next) => {
    try {
       const searchTerm = req.query.searchTerm || ''
-      const sellCategory = req.query.sellCategory
+      let sellCategory = req.query.sellCategory ?? req.query['sellCategory[]'] ?? null
 
+      if (typeof sellCategory === 'string') {
+         sellCategory = [sellCategory]
+      }
+      // 빈 값 제거
+      if (Array.isArray(sellCategory)) {
+         sellCategory = sellCategory.filter(Boolean)
+      } else if (typeof sellCategory === 'string') {
+         // 콤마로 구분된 경우
+         sellCategory = sellCategory.split(',').filter(Boolean)
+      } else {
+         sellCategory = null
+      }
+      // items 테이블 기준 조건 (상품명 검색)
       const whereClause = {
          ...(searchTerm && {
             itemNm: { [Op.like]: `%${searchTerm}%` },
          }),
       }
 
+      // include: Category 조건
       const includeModels = [
          {
             model: ItemImage,
@@ -114,15 +128,20 @@ router.get('/', verifyToken, async (req, res, next) => {
          {
             model: Category,
             attributes: ['id', 'categoryName'],
+            ...(sellCategory &&
+               sellCategory.length > 0 && {
+                  where: Array.isArray(sellCategory) ? { categoryName: { [Op.in]: sellCategory } } : { categoryName: sellCategory },
+               }),
          },
       ]
-
+      // console.log('🎈includeModels:', includeModels)
       const items = await Item.findAll({
          where: whereClause,
          order: [['createdAt', 'DESC']],
          include: includeModels,
       })
-      console.log('상품 데이터 확인', items)
+      // console.log('🎈items:', items)
+
       res.json({
          success: true,
          message: '상품 목록 조회 성공',
@@ -235,20 +254,20 @@ router.put('/:id', verifyToken, isAdmin, upload.array('img'), async (req, res, n
 /**
  * 5. 상품 삭제
  */
-// router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
-//    try {
-//       const item = await Item.findByPk(req.params.id)
-//       if (!item) {
-//          const error = new Error('상품을 찾을 수 없습니다.')
-//          error.status = 404
-//          return next(error)
-//       }
-//       await item.destroy()
-//       res.json({ success: true, message: '상품이 삭제되었습니다.' })
-//    } catch (error) {
-//       error.status = 500
-//       error.message = '상품 삭제 실패'
-//       next(error)
-//    }
-// })
+router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
+   try {
+      const item = await Item.findByPk(req.params.id)
+      if (!item) {
+         const error = new Error('상품을 찾을 수 없습니다.')
+         error.status = 404
+         return next(error)
+      }
+      await item.destroy()
+      res.json({ success: true, message: '상품이 삭제되었습니다.' })
+   } catch (error) {
+      error.status = 500
+      error.message = '상품 삭제 실패'
+      next(error)
+   }
+})
 module.exports = router
