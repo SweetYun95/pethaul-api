@@ -99,7 +99,6 @@ router.get('/', isLoggedIn, async (req, res) => {
 })
 
 // 전체 주문 조회(관리자용)
-
 router.get('/all/admin', async (req, res, next) => {
    try {
       const sort = req.query.sort || 'orderDate'
@@ -147,62 +146,6 @@ router.get('/all/admin', async (req, res, next) => {
             [col('Items->ItemImages.imgUrl'), 'itemImgUrl'],
             [fn('COUNT', fn('DISTINCT', col('Order.id'))), 'orderCount'], // 주문 건수
          ],
-
-         include: [
-            {
-               model: Item,
-               attributes: [],
-               through: {
-                  attributes: [],
-               },
-               include: [
-                  {
-                     model: ItemImage,
-                     attributes: [],
-                     required: false,
-                  },
-               ],
-            },
-         ],
-         order: orderClause,
-         group: ['Items.id', 'Order.id', 'Order.orderDate', 'Order.orderStatus', 'Items.itemNm', 'Items.price', 'Items->OrderItem.orderPrice', 'Items->OrderItem.count', 'Items->ItemImages.imgUrl'],
-      })
-      if (!orders.length) {
-         return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' })
-      }
-      res.json({ orders })
-   } catch (error) {
-      console.error(error)
-      res.status(500).json({ message: '서버 오류', error: error })
-   }
-})
-
-// 회원 조회용 주문데이터(베스트셀러 정렬 등)
-router.get('/all/main', async (req, res, next) => {
-   try {
-      const sort = req.query.sort || 'orderDate'
-      let orderClause = [['orderDate', 'DESC']]
-      let group
-      let whereClause = {}
-
-      if (sort === 'salesCount') {
-         //전체 판매량순
-         orderClause = [[fn('SUM', col('Items->OrderItem.count')), 'DESC']]
-         group = ['Items.id']
-      } else if (sort === 'orderDate') {
-         //최근 주문 많은 순
-         orderClause = [[fn('COUNT', col('Items->OrderItem.count')), 'DESC']]
-         group = ['Items.id']
-
-         // 최근 1개월 조건
-         const oneMonthAgo = new Date()
-         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
-         whereClause.orderDate = { [Op.between]: [oneMonthAgo, new Date()] }
-      }
-
-      const orders = await Order.findAll({
-         where: whereClause,
-         attributes: ['id', 'orderDate', 'orderStatus', [col('Items->OrderItem.orderPrice'), 'orderPrice'], [col('Items->OrderItem.count'), 'count'], [col('Items.itemNm'), 'itemNm'], [col('Items.price'), 'price'], [col('Items.id'), 'itemId'], [col('Items->ItemImages.imgUrl'), 'itemImgUrl']],
 
          include: [
             {
