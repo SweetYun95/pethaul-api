@@ -15,7 +15,7 @@ function decodeOriginalName(raw) {
       try {
          return decodeURIComponent(utf8)
       } catch {
-         /* 무시 */
+         /* ignore */
       }
    }
    return utf8
@@ -36,9 +36,9 @@ const upload = multer({
          cb(null, 'uploads/')
       },
       filename(req, file, cb) {
-         const decodeFileName = decodeURIComponent(file.originalname)
-         const ext = path.extname(decodeFileName)
-         const basename = path.basename(decodeFileName, ext)
+         const decoded = decodeOriginalName(file.originalname)
+         const ext = path.extname(decoded)
+         const basename = path.basename(decoded, ext)
          cb(null, basename + Date.now() + ext)
       },
    }),
@@ -52,27 +52,32 @@ const upload = multer({
 router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
    const t = await sequelize.transaction()
    try {
-      console.log('파일정보:', req.file)
-      console.log('formData:', req.body)
       const { petName, petType, breed, gender } = req.body
       const age = Number(req.body.age ?? 0)
+
+      if (!petName || !petType) {
+         await t.rollback()
+         const error = new Error('필수 값이 누락되었습니다. (petName, petType)')
+         error.status = 400
+         return next(error)
+      }
 
       // 1) 펫 생성
       const pet = await Pet.create({ userId: req.user.id, petName, petType, breed, gender, age }, { transaction: t })
 
       // 2) 이미지 저장
       let petImages = []
-      if (req.files?.length > 0) {
-         petImages = req.files.map((file, idx) => ({
-            oriImgName: decodeOriginalName(file.originalname), // 컬럼명에 맞게 조정
-            imgUrl: `/${file.filename}`, // 프로젝트 컬럼이 url이면 url로 변경
+      if (Array.isArray(req.files) && req.files.length > 0) {
+         petImages = req.files.map((file) => ({
+            oriImgName: decodeOriginalName(file.originalname),
+            imgUrl: `/${file.filename}`,
             petId: pet.id,
          }))
          await PetImage.bulkCreate(petImages, { transaction: t })
       }
 
       await t.commit()
-      res.status(201).json({
+      return res.status(201).json({
          success: true,
          message: '펫이 성공적으로 등록되었습니다.',
          pet,
@@ -80,8 +85,9 @@ router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
       })
    } catch (error) {
       await t.rollback()
-      console.error('[펫 등록 에러]', error)
-      next({ status: 500, message: '펫 등록 중 오류가 발생했습니다.' })
+      error.status = error.status || 500
+      error.message = error.message || '펫 등록 중 오류가 발생했습니다.'
+      return next(error)
    }
 })
 
@@ -93,8 +99,8 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
    try {
       const { petName, petType, breed, gender } = req.body
       const age = Number(req.body.age ?? 0)
-      const pet = await Pet.findByPk(req.params.id)
 
+      const pet = await Pet.findByPk(req.params.id)
       if (!pet) {
          const error = new Error('해당 펫을 찾을 수 없습니다.')
          error.status = 404
@@ -109,9 +115,9 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
       await pet.update({ petName, petType, breed, gender, age })
 
       // 파일이 올라오면 기존 이미지 교체
-      if (req.files && req.files.length > 0) {
+      if (Array.isArray(req.files) && req.files.length > 0) {
          await PetImage.destroy({ where: { petId: pet.id } })
-         const petImages = req.files.map((file, idx) => ({
+         const petImages = req.files.map((file) => ({
             oriImgName: decodeOriginalName(file.originalname),
             imgUrl: `/${file.filename}`,
             petId: pet.id,
@@ -119,14 +125,14 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
          await PetImage.bulkCreate(petImages)
       }
 
-      res.json({
+      return res.json({
          success: true,
          message: '펫 정보를 성공적으로 수정했습니다.',
       })
    } catch (error) {
-      error.status = 500
-      error.message = '펫 수정 중 오류가 발생했습니다.'
-      next(error)
+      error.status = error.status || 500
+      error.message = error.message || '펫 수정 중 오류가 발생했습니다.'
+      return next(error)
    }
 })
 
@@ -148,11 +154,11 @@ router.delete('/:id', isLoggedIn, async (req, res, next) => {
       }
 
       await pet.destroy()
-      res.status(200).json({ success: true, message: '펫이 삭제되었습니다.' })
+      return res.status(200).json({ success: true, message: '펫이 삭제되었습니다.' })
    } catch (error) {
-      error.status = 500
-      error.message = '펫 삭제 중 오류가 발생했습니다.'
-      next(error)
+      error.status = error.status || 500
+      error.message = error.message || '펫 삭제 중 오류가 발생했습니다.'
+      return next(error)
    }
 })
 
@@ -161,7 +167,6 @@ router.delete('/:id', isLoggedIn, async (req, res, next) => {
  */
 router.get('/', isLoggedIn, async (req, res, next) => {
    try {
-      console.log('🎈req.user.id:', req.user.id)
       const pets = await Pet.findAll({
          where: { userId: req.user.id },
          include: [
@@ -174,18 +179,16 @@ router.get('/', isLoggedIn, async (req, res, next) => {
          ],
          order: [['createdAt', 'DESC']],
       })
-      console.log('🎈pets:', pets)
 
-      res.status(200).json({
+      return res.status(200).json({
          success: true,
          message: '회원이 등록한 펫 목록을 성공적으로 불러왔습니다.',
          pets,
       })
    } catch (error) {
-      error.status = 500
-      console.log('🎈에러 원본:', error)
-      error.message = '데이터를 불러오는 중 오류가 발생했습니다.'
-      next(error)
+      error.status = error.status || 500
+      error.message = error.message || '데이터를 불러오는 중 오류가 발생했습니다.'
+      return next(error)
    }
 })
 
