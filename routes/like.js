@@ -32,6 +32,21 @@ router.get('/me', isLoggedIn, async (req, res) => {
       res.status(500).json({ message: '좋아요 상품 조회 실패' })
    }
 })
+
+
+//내가 좋아요한 id목록
+router.get('/ids', isLoggedIn, async (req, res, next) => {
+   try {
+      const rows = await Like.findAll({
+         where: { userId: req.user.id },
+         attributes: ['itemId'],
+      })
+      res.json({ itemIds: rows.map((r) => r.itemId) })
+   } catch (e) {
+      next(e)
+   }
+})
+
 // 좋아요 토글로?
 router.post('/:itemId', isLoggedIn, async (req, res) => {
    const { itemId } = req.params
