@@ -2,9 +2,10 @@ const express = require('express')
 const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
-const { Op } = require('sequelize')
-const { Item, ItemImage, Category, ItemCategory, Review, ReviewImage, User } = require('../models')
+const { Item, ItemImage, Category, ItemCategory, Review, ReviewImage, User, Order, OrderItem } = require('../models')
 const { isAdmin, verifyToken } = require('./middlewares')
+const { Op, col, fn } = require('sequelize')
+
 const router = express.Router()
 // uploads 폴더가 없을 경우 새로 생성
 try {
@@ -98,14 +99,28 @@ router.post('/', verifyToken, isAdmin, upload.array('img'), async (req, res, nex
 router.get('/', verifyToken, async (req, res, next) => {
    try {
       const searchTerm = req.query.searchTerm || ''
-      const sellCategory = req.query.sellCategory
+      let sellCategory = req.query.sellCategory ?? req.query['sellCategory[]'] ?? null
 
+      if (typeof sellCategory === 'string') {
+         sellCategory = [sellCategory]
+      }
+      // 빈 값 제거
+      if (Array.isArray(sellCategory)) {
+         sellCategory = sellCategory.filter(Boolean)
+      } else if (typeof sellCategory === 'string') {
+         // 콤마로 구분된 경우
+         sellCategory = sellCategory.split(',').filter(Boolean)
+      } else {
+         sellCategory = null
+      }
+      // items 테이블 기준 조건 (상품명 검색)
       const whereClause = {
          ...(searchTerm && {
             itemNm: { [Op.like]: `%${searchTerm}%` },
          }),
       }
 
+      // include: Category 조건
       const includeModels = [
          {
             model: ItemImage,
@@ -114,15 +129,20 @@ router.get('/', verifyToken, async (req, res, next) => {
          {
             model: Category,
             attributes: ['id', 'categoryName'],
+            ...(sellCategory &&
+               sellCategory.length > 0 && {
+                  where: Array.isArray(sellCategory) ? { categoryName: { [Op.in]: sellCategory } } : { categoryName: sellCategory },
+               }),
          },
       ]
-
+      // console.log('🎈includeModels:', includeModels)
       const items = await Item.findAll({
          where: whereClause,
          order: [['createdAt', 'DESC']],
          include: includeModels,
       })
-      console.log('상품 데이터 확인', items)
+      // console.log('🎈items:', items)
+
       res.json({
          success: true,
          message: '상품 목록 조회 성공',
@@ -136,7 +156,113 @@ router.get('/', verifyToken, async (req, res, next) => {
 })
 
 /**
- * 3. 특정 상품 불러오기
+ * 3. 메인 페이지용 상품 불러오기
+ */
+
+router.get('/all/main', async (req, res, next) => {
+   try {
+      const limit = Number(req.query.limit)
+      console.log('🎈🎈limit:', limit)
+      // 1. 전체 판매량 기준
+      const topSales = await Item.findAll({
+         attributes: [
+            ['id', 'itemId'],
+            ['itemNm', 'itemNm'],
+            ['price', 'price'],
+            [fn('SUM', col('Orders->OrderItem.count')), 'totalCount'], // 총 판매 수량
+            [col('ItemImages.imgUrl'), 'itemImgUrl'],
+         ],
+         include: [
+            {
+               model: Order,
+               attributes: [],
+               through: { attributes: [] },
+            },
+            {
+               model: ItemImage,
+               attributes: [],
+               required: false,
+               where: { repImgYn: 'Y' },
+            },
+         ],
+         group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
+         order: [[fn('SUM', col('Orders->OrderItem.count')), 'DESC']],
+         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
+         subQuery: false,
+      })
+
+      console.log('🎈topSales:', topSales)
+
+      // 오늘 날짜 00:00 기준
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      // 2. 오늘 주문 건수
+      const topToday = await Item.findAll({
+         attributes: [
+            ['id', 'itemId'],
+            ['itemNm', 'itemNm'],
+            ['price', 'price'],
+            [fn('COUNT', fn('DISTINCT', col('OrderItems.orderId'))), 'orderCount'],
+            [col('ItemImages.imgUrl'), 'itemImgUrl'],
+         ],
+         include: [
+            {
+               model: OrderItem,
+               attributes: [],
+               include: [
+                  {
+                     model: Order,
+                     attributes: [],
+                     where: { orderDate: { [Op.gte]: today } },
+                  },
+               ],
+            },
+            {
+               model: ItemImage,
+               attributes: [],
+               required: false,
+               where: { repImgYn: 'Y' },
+            },
+         ],
+         group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
+         order: [['orderCount', 'DESC']],
+         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
+         subQuery: false,
+      })
+      // console.log('🎈today:', topToday)
+
+      // 3. 최신 등록 상품
+      const newItems = await Item.findAll({
+         attributes: ['id', 'itemNm', 'price', 'createdAt', [col('ItemImages.imgUrl'), 'itemImgUrl']],
+         include: [
+            {
+               model: ItemImage,
+               attributes: [],
+               required: false,
+               where: { repImgYn: 'Y' }, // 대표이미지 필터까지 가능
+            },
+         ],
+         order: [['createdAt', 'DESC']],
+         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
+         raw: false,
+         subQuery: false,
+      })
+      // console.log('🎈newItems:', newItems)
+
+      res.json({
+         topSales,
+         topToday,
+         newItems,
+      })
+   } catch (error) {
+      console.error(error)
+      res.status(500).json({ message: '서버 오류', error })
+   }
+})
+
+/**
+ * 4. 특정 상품 불러오기
  */
 router.get('/:id', verifyToken, async (req, res, next) => {
    try {
@@ -178,7 +304,7 @@ router.get('/:id', verifyToken, async (req, res, next) => {
    }
 })
 /**
- * 4. 상품 수정
+ * 5. 상품 수정
  */
 router.put('/:id', verifyToken, isAdmin, upload.array('img'), async (req, res, next) => {
    try {
@@ -233,7 +359,7 @@ router.put('/:id', verifyToken, isAdmin, upload.array('img'), async (req, res, n
    }
 })
 /**
- * 5. 상품 삭제
+ * 6. 상품 삭제
  */
 router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
    try {
@@ -251,4 +377,5 @@ router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
       next(error)
    }
 })
+
 module.exports = router
