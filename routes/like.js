@@ -34,7 +34,6 @@ router.get('/me', isLoggedIn, async (req, res) => {
 })
 
 
-//내가 좋아요한 id목록
 router.get('/ids', isLoggedIn, async (req, res, next) => {
    try {
       const rows = await Like.findAll({
