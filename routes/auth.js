@@ -47,7 +47,7 @@ router.post('/join', isNotLoggedIn, async (req, res) => {
 })
 
 // 아이디 중복 확인
-router.post('/check-username', async (req, res) => {
+router.post('/check-username', async (req, res, next) => {
    const { userId } = req.body
 
    try {
@@ -105,6 +105,7 @@ router.post('/login', isNotLoggedIn, (req, res, next) => {
                role: user.role,
                provider: user.provider,
                phoneNumber: user.phoneNumber, // ✅ 추가
+               address: user.address,
             },
          })
       })
@@ -139,6 +140,7 @@ router.get('/check', (req, res) => {
             role: req.user.role,
             provider: req.user.provider,
             phoneNumber: req.user.phoneNumber, // ✅ 추가
+            address: req.user.address,
          },
       })
    } else {
@@ -208,6 +210,7 @@ router.post('/findid', isNotLoggedIn, async (req, res, next) => {
       next(error)
    }
 })
+
 // 비밀번호 분실 시 임시비밀번호 발급
 router.post('/updatepw', isNotLoggedIn, async (req, res, next) => {
    try {
@@ -234,4 +237,41 @@ router.post('/updatepw', isNotLoggedIn, async (req, res, next) => {
    }
 })
 
+//회원 정보 수정
+router.put('/', isLoggedIn, async (req, res, next) => {
+   try {
+      const { userId, password, name, email, phoneNumber, address, newPassword } = req.body
+      const user = await User.findByPk(req.user.id)
+      if (!user) {
+         return res.status(404).json({ message: '회원 정보를 찾을 수 없습니다.' })
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password)
+      if (!isMatch) {
+         return res.status(401).json({ message: '비밀번호가 일치하지 않습니다.' })
+      }
+
+      user.userId = userId
+      user.name = name
+      user.email = email
+      if (phoneNumber) user.phoneNumber = phoneNumber
+      if (address) user.address = address
+      if (newPassword) user.password = await bcrypt.hash(newPassword, 12)
+
+      await user.save()
+      res.status(200).json({
+         message: '회원 정보를 성공적으로 수정했습니다.',
+         user: {
+            id: req.user.id,
+            userId: user.userId,
+            name: user.name,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            address: user.address,
+         },
+      })
+   } catch (error) {
+      next(error)
+   }
+})
 module.exports = router
