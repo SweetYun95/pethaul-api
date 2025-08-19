@@ -1,72 +1,68 @@
 // routes/order.js
 const express = require('express')
-const { Order, OrderItem, Item, ItemImage, User } = require('../models')
-const { isLoggedIn, isAdmin } = require('./middlewares')
+const { Order, OrderItem, Item, ItemImage } = require('../models')
+const { isLoggedIn } = require('./middlewares')
 const { Op, col, fn } = require('sequelize')
 
 const router = express.Router()
 
-// 주문 생성
-router.post('/', isLoggedIn, async (req, res) => {
+/**
+ * 주문 생성
+ */
+router.post('/', isLoggedIn, async (req, res, next) => {
    const t = await Order.sequelize.transaction()
    try {
       const { items } = req.body // [{ itemId, price, quantity }]
       if (!items || items.length === 0) {
-         return res.status(400).json({ message: '주문할 상품이 없습니다.' })
+         const error = new Error('주문할 상품이 없습니다.')
+         error.status = 400
+         await t.rollback()
+         return next(error)
       }
 
       // 재고 체크
-      for (const item of items) {
-         const product = await Item.findByPk(item.itemId, { transaction: t })
+      for (const it of items) {
+         const product = await Item.findByPk(it.itemId, { transaction: t })
          if (!product) {
             await t.rollback()
-            return res.status(404).json({ message: `상품 ID ${item.itemId}을 찾을 수 없습니다.` })
+            const error = new Error(`상품 ID ${it.itemId}을 찾을 수 없습니다.`)
+            error.status = 404
+            return next(error)
          }
-         if (product.stockNumber < item.quantity) {
+         if (product.stockNumber < it.quantity) {
             await t.rollback()
-            return res.status(400).json({ message: `${product.itemNm} 상품 재고가 부족합니다.` })
+            const error = new Error(`${product.itemNm} 상품 재고가 부족합니다.`)
+            error.status = 400
+            return next(error)
          }
       }
 
       // 주문 생성
-      const order = await Order.create(
-         {
-            userId: req.user.id,
-            orderDate: new Date(),
-            orderStatus: 'ORDER',
-         },
-         { transaction: t }
-      )
+      const order = await Order.create({ userId: req.user.id, orderDate: new Date(), orderStatus: 'ORDER' }, { transaction: t })
 
       // 주문상품 생성 + 재고 차감
-      for (const item of items) {
-         await OrderItem.create(
-            {
-               orderId: order.id,
-               itemId: item.itemId,
-               orderPrice: item.price * item.quantity,
-               count: item.quantity,
-            },
-            { transaction: t }
-         )
+      for (const it of items) {
+         await OrderItem.create({ orderId: order.id, itemId: it.itemId, orderPrice: it.price * it.quantity, count: it.quantity }, { transaction: t })
 
-         // 재고 차감
-         const product = await Item.findByPk(item.itemId, { transaction: t })
-         product.stockNumber -= item.quantity
+         const product = await Item.findByPk(it.itemId, { transaction: t })
+         product.stockNumber -= it.quantity
          await product.save({ transaction: t })
       }
 
       await t.commit()
-      res.status(201).json({ message: '주문이 완료되었습니다.', orderId: order.id })
+      return res.status(201).json({ success: true, message: '주문이 완료되었습니다.', orderId: order.id })
    } catch (err) {
       await t.rollback()
-      console.error(err)
-      res.status(500).json({ message: '서버 오류', error: err })
+      err.status = err.status || 500
+      err.message = err.message || '주문 생성 실패'
+      return next(err)
    }
 })
 
-// 주문 목록 조회
-router.get('/', isLoggedIn, async (req, res) => {
+/**
+ * 주문 목록 조회 (내 주문)
+ */
+router.get('/', isLoggedIn, async (req, res, next) => {
    try {
       const orders = await Order.findAll({
          where: { userId: req.user.id },
@@ -87,18 +83,17 @@ router.get('/', isLoggedIn, async (req, res) => {
          ],
       })
 
-      res.status(200).json({
-         success: true,
-         message: '주문목록 조회 성공',
-         orders,
-      })
+      return res.status(200).json({ success: true, message: '주문목록 조회 성공', orders })
    } catch (err) {
-      console.error(err)
-      res.status(500).json({ message: '서버 오류', error: err })
+      err.status = err.status || 500
+      err.message = '주문목록 조회 실패'
+      return next(err)
    }
 })
 
-// 전체 주문 조회(관리자용)
+/**
+ * 전체 주문 조회(관리자용)
+ */
 router.get('/all/admin', async (req, res, next) => {
    try {
       const sort = req.query.sort || 'orderDate'
@@ -107,29 +102,23 @@ router.get('/all/admin', async (req, res, next) => {
       let whereClause = {}
 
       if (sort === 'salesCount') {
-         //전체 판매량순
+         // 전체 판매량순
          orderClause = [[fn('SUM', col('Items->OrderItem.count')), 'DESC']]
          group = ['Items.id']
       } else if (sort === 'orderDate') {
-         //최근 주문 많은 순
+         // 최근 주문 많은 순 (최근 1개월)
          orderClause = [[fn('COUNT', col('Items->OrderItem.count')), 'DESC']]
          group = ['Items.id']
-
-         // 최근 1개월 조건
          const oneMonthAgo = new Date()
          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
          whereClause.orderDate = { [Op.between]: [oneMonthAgo, new Date()] }
       } else if (sort === 'yesterday') {
-         //전일자 주문 조회
+         // 전일자 주문 조회
          const yesterday = new Date()
          yesterday.setDate(yesterday.getDate() - 1)
-
          const startOfYesterday = new Date(yesterday.setHours(0, 0, 0, 0))
          const endOfYesterday = new Date(yesterday.setHours(23, 59, 59, 999))
-
-         whereClause.orderDate = {
-            [Op.between]: [startOfYesterday, endOfYesterday],
-         }
+         whereClause.orderDate = { [Op.between]: [startOfYesterday, endOfYesterday] }
       }
 
       const orders = await Order.findAll({
@@ -144,119 +133,125 @@ router.get('/all/admin', async (req, res, next) => {
             [col('Items.price'), 'price'],
             [col('Items.id'), 'itemId'],
             [col('Items->ItemImages.imgUrl'), 'itemImgUrl'],
-            [fn('COUNT', fn('DISTINCT', col('Order.id'))), 'orderCount'], // 주문 건수
+            [fn('COUNT', fn('DISTINCT', col('Order.id'))), 'orderCount'],
          ],
-
          include: [
             {
                model: Item,
                attributes: [],
-               through: {
-                  attributes: [],
-               },
-               include: [
-                  {
-                     model: ItemImage,
-                     attributes: [],
-                     required: false,
-                  },
-               ],
+               through: { attributes: [] },
+               include: [{ model: ItemImage, attributes: [], required: false }],
             },
          ],
          order: orderClause,
          group: ['Items.id', 'Order.id', 'Order.orderDate', 'Order.orderStatus', 'Items.itemNm', 'Items.price', 'Items->OrderItem.orderPrice', 'Items->OrderItem.count', 'Items->ItemImages.imgUrl'],
       })
+
       if (!orders.length) {
-         return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' })
+         const error = new Error('데이터를 찾을 수 없습니다.')
+         error.status = 404
+         return next(error)
       }
-      res.json({ orders })
-   } catch (error) {
-      console.error(error)
-      res.status(500).json({ message: '서버 오류', error: error })
+
+      return res.json({ success: true, orders })
+   } catch (err) {
+      err.status = err.status || 500
+      err.message = '관리자 주문 조회 실패'
+      return next(err)
    }
 })
 
-// 주문 상세 조회
-router.get('/:id', isLoggedIn, async (req, res) => {
+/**
+ * 주문 상세 조회 (내 주문)
+ */
+router.get('/:id', isLoggedIn, async (req, res, next) => {
    try {
       const order = await Order.findOne({
          where: { id: req.params.id, userId: req.user.id },
-         include: [
-            {
-               model: Item,
-               through: { attributes: ['orderPrice', 'count'] },
-            },
-         ],
+         include: [{ model: Item, through: { attributes: ['orderPrice', 'count'] } }],
       })
+
       if (!order) {
-         return res.status(404).json({ message: '주문을 찾을 수 없습니다.' })
+         const error = new Error('주문을 찾을 수 없습니다.')
+         error.status = 404
+         return next(error)
       }
-      res.json(order)
+
+      return res.json({ success: true, order })
    } catch (err) {
-      console.error(err)
-      res.status(500).json({ message: '서버 오류', error: err })
+      err.status = err.status || 500
+      err.message = '주문 상세 조회 실패'
+      return next(err)
    }
 })
 
-// 주문 취소
-router.patch('/:id/cancel', isLoggedIn, async (req, res) => {
+/**
+ * 주문 취소 (내 주문)
+ */
+router.patch('/:id/cancel', isLoggedIn, async (req, res, next) => {
    const t = await Order.sequelize.transaction()
    try {
       const order = await Order.findOne({
          where: { id: req.params.id, userId: req.user.id },
-         include: [
-            {
-               model: Item,
-               through: { attributes: ['count'] },
-            },
-         ],
+         include: [{ model: Item, through: { attributes: ['count'] } }],
          transaction: t,
       })
 
       if (!order) {
          await t.rollback()
-         return res.status(404).json({ message: '주문을 찾을 수 없습니다.' })
+         const error = new Error('주문을 찾을 수 없습니다.')
+         error.status = 404
+         return next(error)
       }
 
       // 재고 복구
-      for (const item of order.Items) {
-         const product = await Item.findByPk(item.id, { transaction: t })
-         product.stockNumber += item.OrderItem.count
+      for (const it of order.Items) {
+         const product = await Item.findByPk(it.id, { transaction: t })
+         product.stockNumber += it.OrderItem.count
          await product.save({ transaction: t })
       }
 
-      // 상태 변경
       order.orderStatus = 'CANCEL'
       await order.save({ transaction: t })
 
       await t.commit()
-      res.json({ message: '주문이 취소되었습니다.' })
+      return res.json({ success: true, message: '주문이 취소되었습니다.' })
    } catch (err) {
       await t.rollback()
-      console.error(err)
-      res.status(500).json({ message: '서버 오류', error: err })
+      err.status = err.status || 500
+      err.message = '주문 취소 실패'
+      return next(err)
    }
 })
 
-//주문 상태 변경(배송 준비중 등)
+/**
+ * 주문 상태 변경 (관리자/시스템 용도로 가정)
+ * - 쿼리: ?status=SHIPPING 등
+ */
 router.patch('/:id', async (req, res, next) => {
    try {
       const newStatus = req.query.status
-
-      const order = await Order.findOne({
-         where: {
-            id: req.params.id,
-         },
-      })
-      if (!order) {
-         return res.status(404).json({ message: '주문을 찾을 수 없습니다.' })
+      if (!newStatus) {
+         const error = new Error('변경할 상태(status)가 필요합니다.')
+         error.status = 400
+         return next(error)
       }
+
+      const order = await Order.findOne({ where: { id: req.params.id } })
+      if (!order) {
+         const error = new Error('주문을 찾을 수 없습니다.')
+         error.status = 404
+         return next(error)
+      }
+
       order.orderStatus = newStatus
       await order.save()
-      res.json({ message: `주문 상태가 ${req.query.status}로 변경되었습니다.` })
-   } catch (error) {
-      console.error(error)
-      res.status(500).json({ message: '서버 오류', error: error })
+
+      return res.json({ success: true, message: `주문 상태가 ${newStatus}로 변경되었습니다.` })
+   } catch (err) {
+      err.status = err.status || 500
+      err.message = '주문 상태 변경 실패'
+      return next(err)
    }
 })
 

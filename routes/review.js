@@ -1,18 +1,32 @@
+// routes/review.js
 const express = require('express')
 const { sequelize, Review, Item, ItemImage, ReviewImage } = require('../models')
 const { isLoggedIn } = require('./middlewares')
 const fs = require('fs')
 const path = require('path')
 const multer = require('multer')
-const { Op } = require('sequelize')
+
 const router = express.Router()
 
+// 📌 한글/특수문자 파일명 복구 유틸 (업로드 일관성)
+function decodeOriginalName(raw) {
+   const utf8 = Buffer.from(raw, 'latin1').toString('utf8')
+   if (/%[0-9A-Fa-f]{2}/.test(utf8)) {
+      try {
+         return decodeURIComponent(utf8)
+      } catch {}
+   }
+   return utf8
+}
+
+// uploads 폴더 준비
 try {
    fs.readdirSync('uploads')
 } catch (error) {
    console.log('uploads 폴더가 없어 uploads 폴더를 생성합니다.')
    fs.mkdirSync('uploads')
 }
+
 // multer 설정
 const upload = multer({
    storage: multer.diskStorage({
@@ -20,7 +34,7 @@ const upload = multer({
          cb(null, 'uploads/')
       },
       filename(req, file, cb) {
-         const decodedFileName = decodeURIComponent(file.originalname)
+         const decodedFileName = decodeOriginalName(file.originalname)
          const ext = path.extname(decodedFileName)
          const basename = path.basename(decodedFileName, ext)
          cb(null, basename + Date.now() + ext)
@@ -29,17 +43,23 @@ const upload = multer({
    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 })
 
-// 리뷰 등록하기
+/**
+ * 리뷰 등록
+ * [POST] /
+ * form-data: itemId, reviewDate, reviewContent, rating, img[]
+ */
 router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
    const t = await sequelize.transaction()
    try {
       const { itemId, reviewDate, reviewContent, rating } = req.body
       const userId = req.user.id
+
       const review = await Review.create({ itemId, userId, reviewDate, reviewContent, rating }, { transaction: t })
+
       let reviewImages = []
       if (req.files?.length > 0) {
          reviewImages = req.files.map((file) => ({
-            oriImgName: file.originalname,
+            oriImgName: decodeOriginalName(file.originalname),
             imgUrl: `/${file.filename}`,
             reviewId: review.id,
          }))
@@ -55,15 +75,16 @@ router.post('/', isLoggedIn, upload.array('img'), async (req, res, next) => {
       })
    } catch (error) {
       await t.rollback()
-      console.error('[리뷰 등록 에러]', error)
-      next({
-         status: 500,
-         message: '후기 등록 중 오류가 발생했습니다.',
-      })
+      error.status = error.status || 500
+      error.message = '후기 등록 중 오류가 발생했습니다.'
+      next(error)
    }
 })
 
-//리뷰 수정하기
+/**
+ * 리뷰 수정 (이미지 재업로드 시 전부 교체)
+ * [PUT] /edit/:id
+ */
 router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) => {
    try {
       const { itemId, reviewDate, reviewContent, rating } = req.body
@@ -74,51 +95,66 @@ router.put('/edit/:id', isLoggedIn, upload.array('img'), async (req, res, next) 
          error.status = 404
          return next(error)
       }
+      if (review.userId !== req.user.id) {
+         const error = new Error('권한이 없습니다.')
+         error.status = 403
+         return next(error)
+      }
 
       await review.update({ itemId, reviewDate, reviewContent, rating })
+
       if (req.files && req.files.length > 0) {
          await ReviewImage.destroy({ where: { reviewId: review.id } })
-         let reviewImages = []
-         reviewImages = req.files.map((file) => ({
-            oriImgName: file.originalname,
+         const reviewImages = req.files.map((file) => ({
+            oriImgName: decodeOriginalName(file.originalname),
             imgUrl: `/${file.filename}`,
             reviewId: review.id,
          }))
          await ReviewImage.bulkCreate(reviewImages)
       }
 
-      res.json({
-         success: true,
-         message: '후기를 성공적으로 수정했습니다.',
-      })
+      res.json({ success: true, message: '후기를 성공적으로 수정했습니다.' })
    } catch (error) {
-      error.status = 500
+      error.status = error.status || 500
       error.message = '리뷰 수정 중 오류가 발생했습니다.'
       next(error)
    }
 })
-//리뷰 삭제하기
-router.delete('/:id', async (req, res, next) => {
+
+/**
+ * 리뷰 삭제
+ * [DELETE] /:id
+ */
+router.delete('/:id', isLoggedIn, async (req, res, next) => {
    try {
       const { id } = req.params
-      console.log('🎈review.js id:', id)
-      const review = await Review.findOne({
-         where: { id },
-      })
-      console.log('🎈review.js review:', review)
+      const review = await Review.findByPk(id)
+
+      if (!review) {
+         const error = new Error('해당 후기를 찾을 수 없습니다.')
+         error.status = 404
+         return next(error)
+      }
+      if (review.userId !== req.user.id) {
+         const error = new Error('권한이 없습니다.')
+         error.status = 403
+         return next(error)
+      }
 
       await review.destroy()
       res.status(200).json({ success: true, message: '후기가 삭제되었습니다.' })
    } catch (error) {
-      error.status = 500
-      console.log('🎈reivew.js error:', error)
-
+      error.status = error.status || 500
       error.message = '리뷰 삭제 중 오류가 발생했습니다.'
       next(error)
    }
 })
-//회원이 작성한 리뷰 목록 불러오기
-router.get('/', async (req, res, next) => {
+
+/**
+ * 회원이 작성한 리뷰 목록 조회
+ * [GET] /
+ */
+router.get('/', isLoggedIn, async (req, res, next) => {
    try {
       const review = await Review.findAll({
          where: { userId: req.user.id },
@@ -138,17 +174,17 @@ router.get('/', async (req, res, next) => {
          ],
          order: [['createdAt', 'DESC']],
       })
+
       res.status(200).json({
          success: true,
          message: '회원이 작성한 리뷰를 성공적으로 불러왔습니다.',
          review,
       })
-      // console.log('🎆결과확인해봅시다!!', res.status)
    } catch (error) {
-      // console.error('에러:', error)
-      error.status = 500
+      error.status = error.status || 500
       error.message = '데이터를 불러오는 중 오류가 발생했습니다.'
       next(error)
    }
 })
+
 module.exports = router
