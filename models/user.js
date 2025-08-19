@@ -51,6 +51,11 @@ module.exports = class User extends Sequelize.Model {
                allowNull: false,
                defaultValue: 'local', // 기본값은 local로 설정
             },
+            tempPasswordExpiresAt: {
+               type: Sequelize.DATE,
+               allowNull: true,
+               comment: '임시 비밀번호 만료 시간',
+            },
          },
          {
             sequelize,
@@ -72,6 +77,6 @@ module.exports = class User extends Sequelize.Model {
       User.hasOne(db.Cart, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
       User.hasMany(db.Review, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
       User.hasMany(db.Pet, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
-       User.hasMany(db.Like, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
+      User.hasMany(db.Like, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
    }
 }

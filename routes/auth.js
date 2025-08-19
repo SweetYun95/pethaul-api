@@ -1,5 +1,6 @@
 // routes/auth.js
 const express = require('express')
+const crypto = require('crypto')
 const bcrypt = require('bcrypt')
 const passport = require('passport')
 const { User } = require('../models')
@@ -74,9 +75,29 @@ router.post('/login', isNotLoggedIn, (req, res, next) => {
          err.status = 401
          return next(err)
       }
+     
+      req.login(user, async (loginError) => {
+         if (loginError) {
+            console.error(loginError)
+            return next(loginError)
+         }
 
-      req.login(user, (loginError) => {
-         if (loginError) return next(loginError)
+
+         //임시 비밀번호 만료 확인
+         if (user.tempPasswordExpiresAt && new Date() > user.tempPasswordExpiresAt) {
+            // DB에서 임시 비밀번호 만료 처리
+            await User.update(
+               {
+                  tempPasswordExpiresAt: null,
+                  password: null,
+               },
+               { where: { id: user.id } }
+            )
+
+            return res.status(401).json({
+               message: '임시 비밀번호가 만료되었습니다. 다시 비밀번호 찾기를 진행해주세요.',
+            })
+         }
 
          return res.status(200).json({
             success: true,
@@ -159,6 +180,53 @@ router.get('/googlecheck', (req, res) => {
       })
    }
    return res.status(200).json({ googleAuthenticated: false })
+})
+
+// 핸드폰 번호로 id 찾기
+router.post('/findid', isNotLoggedIn, async (req, res, next) => {
+   try {
+      const { phoneNumber } = req.body
+      console.log('🎀phoneNumber:', phoneNumber)
+      const users = await User.findAll({ where: { phoneNumber } })
+
+      if (!users.length) {
+         return res.status(404).json({
+            message: '입력하신 정보와 일치하는 회원이 존재하지 않습니다.',
+         })
+      }
+
+      res.status(200).json({
+         message: 'ID 조회에 성공했습니다.',
+         ids: users.map((user) => user.userId),
+      })
+   } catch (error) {
+      next(error)
+   }
+})
+// 비밀번호 분실 시 임시비밀번호 발급
+router.post('/updatepw', isNotLoggedIn, async (req, res, next) => {
+   try {
+      const { userId, phoneNumber } = req.body
+      const user = await User.findOne({ where: { userId, phoneNumber } })
+      if (!user) {
+         return res.status(404).json({ message: '입력하신 정보와 일치하는 회원이 존재하지 않습니다.' })
+      }
+
+      //임시 비밀번호 생성 및 해싱
+      const tempPassword = crypto.randomBytes(6).toString('hex')
+      const hash = await bcrypt.hash(tempPassword, 10)
+
+      await user.update({
+         password: hash,
+         tempPasswordExpiresAt: new Date(Date.now() + 30 * 60 * 1000), // 유효시간 30분
+      })
+      res.status(200).json({
+         message: '임시 비밀번호가 발급되었습니다.',
+         tempPassword,
+      })
+   } catch (error) {
+      next(error)
+   }
 })
 
 module.exports = router
