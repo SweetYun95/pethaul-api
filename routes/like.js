@@ -1,12 +1,15 @@
 const express = require('express')
 const { Like, Item, ItemImage } = require('../models')
 const { isLoggedIn } = require('./middlewares')
+
 const router = express.Router()
 
-//조회할때 조건은 req.user.id고 받아와야 할 데이터는 상품id/상품이름/가격/상품이미지입니당
-
-/** 내가 좋아요한 상품 목록 조회 */
-router.get('/me', isLoggedIn, async (req, res) => {
+/**
+ * 내가 좋아요한 상품 목록 조회
+ * - 조건: req.user.id
+ * - 반환: 상품 id / 이름 / 가격 / 대표이미지 포함
+ */
+router.get('/me', isLoggedIn, async (req, res, next) => {
    try {
       const likes = await Like.findAll({
          where: { userId: req.user.id },
@@ -14,24 +17,22 @@ router.get('/me', isLoggedIn, async (req, res) => {
             {
                model: Item,
                attributes: ['id', 'itemNm', 'price'],
-               include: [
-                  {
-                     model: ItemImage,
-                     attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn'],
-                  },
-               ],
+               include: [{ model: ItemImage, attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn'] }],
             },
          ],
       })
 
-      res.status(200).json({
+      return res.status(200).json({
          success: true,
-         items: likes.map((like) => like.Item), //상품 데이터만 뽑아서 프론트로 보낸다.
+         items: likes.map((like) => like.Item), // 상품 데이터만 전달
       })
    } catch (err) {
-      res.status(500).json({ message: '좋아요 상품 조회 실패' })
+      err.status = err.status || 500
+      err.message = '좋아요 상품 조회 실패'
+      return next(err)
    }
 })
+
 
 //내가 좋아요한 id목록
 router.get('/ids', isLoggedIn, async (req, res, next) => {
@@ -40,33 +41,43 @@ router.get('/ids', isLoggedIn, async (req, res, next) => {
          where: { userId: req.user.id },
          attributes: ['itemId'],
       })
-      res.json({ itemIds: rows.map((r) => r.itemId) })
-   } catch (e) {
-      next(e)
+      return res.json({ itemIds: rows.map((r) => r.itemId) })
+   } catch (err) {
+      err.status = err.status || 500
+      err.message = '좋아요 ID 목록 조회 실패'
+      return next(err)
    }
 })
 
-// 좋아요 토글로?
-router.post('/:itemId', isLoggedIn, async (req, res) => {
-   const { itemId } = req.params
+/**
+ * 좋아요 토글
+ * - 이미 존재하면 삭제 → liked: false
+ * - 없으면 생성 → liked: true
+ */
+router.post('/:itemId', isLoggedIn, async (req, res, next) => {
    try {
-      // 현재 유저가 이 상품을 좋아요 했는지 확인
-      const existing = await Like.findOne({
-         where: { userId: req.user.id, itemId },
-      })
+      const { itemId } = req.params
+
+      // 숫자 유효성 (선택적, 안전장치)
+      if (!itemId || Number.isNaN(Number(itemId))) {
+         const error = new Error('유효하지 않은 itemId 입니다.')
+         error.status = 400
+         return next(error)
+      }
+
+      const existing = await Like.findOne({ where: { userId: req.user.id, itemId } })
 
       if (existing) {
-         // 이미 좋아요 → 취소
          await existing.destroy()
          return res.status(200).json({ success: true, liked: false })
-      } else {
-         // 좋아요 추가
-         await Like.create({ userId: req.user.id, itemId })
-         return res.status(201).json({ success: true, liked: true })
       }
+
+      await Like.create({ userId: req.user.id, itemId })
+      return res.status(201).json({ success: true, liked: true })
    } catch (err) {
-      console.error(err)
-      res.status(500).json({ message: '좋아요 토글 실패' })
+      err.status = err.status || 500
+      err.message = '좋아요 토글 실패'
+      return next(err)
    }
 })
 
