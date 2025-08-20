@@ -109,12 +109,8 @@ router.post('/login', isNotLoggedIn, (req, res, next) => {
                name: user.name,
                role: user.role,
                provider: user.provider,
-<<<<<<< HEAD
                phoneNumber: user.phoneNumber, // ✅ 추가
                address: user.address,
-=======
-               phoneNumber: user.phoneNumber,
->>>>>>> 352483f0bd52701d7b071f8b006bf5df2ee859f3
             },
          })
       })
@@ -145,12 +141,8 @@ router.get('/check', (req, res) => {
             name: req.user.name,
             role: req.user.role,
             provider: req.user.provider,
-<<<<<<< HEAD
             phoneNumber: req.user.phoneNumber, // ✅ 추가
             address: req.user.address,
-=======
-            phoneNumber: req.user.phoneNumber,
->>>>>>> 352483f0bd52701d7b071f8b006bf5df2ee859f3
          },
       })
    }
