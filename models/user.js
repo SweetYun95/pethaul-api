@@ -40,7 +40,7 @@ module.exports = class User extends Sequelize.Model {
             },
             email: {
                type: Sequelize.STRING(100),
-               allowNull: true, // 이메일은 선택 사항
+               allowNull: true,
                unique: true, // 이메일 중복 방지 (선택 사항)
                validate: {
                   isEmail: true, // Sequelize 내장 이메일 정규식 검증
