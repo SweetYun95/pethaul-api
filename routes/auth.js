@@ -66,6 +66,22 @@ router.post('/check-username', async (req, res, next) => {
    }
 })
 
+// 이메일 중복 확인
+router.post('/check-email', async (req, res, next) => {
+   try {
+      const { email } = req.body
+      const user = await User.findOne({ where: { email } })
+      if (user) {
+         const error = new Error('이미 사용 중인 이메일입니다.')
+         error.status = 409
+         return next(error)
+      }
+      return res.status(200).json({ success: true, message: '사용 가능한 이메일입니다.' })
+   } catch (error) {
+      return next(error)
+   }
+})
+
 // 로그인
 router.post('/login', isNotLoggedIn, (req, res, next) => {
    passport.authenticate('local', (authError, user, info) => {
@@ -75,13 +91,12 @@ router.post('/login', isNotLoggedIn, (req, res, next) => {
          err.status = 401
          return next(err)
       }
-     
+
       req.login(user, async (loginError) => {
          if (loginError) {
             console.error(loginError)
             return next(loginError)
          }
-
 
          //임시 비밀번호 만료 확인
          if (user.tempPasswordExpiresAt && new Date() > user.tempPasswordExpiresAt) {
@@ -235,18 +250,12 @@ router.post('/updatepw', isNotLoggedIn, async (req, res, next) => {
 //회원 정보 수정
 router.put('/', isLoggedIn, async (req, res, next) => {
    try {
-      const { userId, password, name, email, phoneNumber, address, newPassword } = req.body
+      const { name, email, phoneNumber, address, newPassword } = req.body
       const user = await User.findByPk(req.user.id)
       if (!user) {
          return res.status(404).json({ message: '회원 정보를 찾을 수 없습니다.' })
       }
 
-      const isMatch = await bcrypt.compare(password, user.password)
-      if (!isMatch) {
-         return res.status(401).json({ message: '비밀번호가 일치하지 않습니다.' })
-      }
-
-      user.userId = userId
       user.name = name
       user.email = email
       if (phoneNumber) user.phoneNumber = phoneNumber
@@ -264,6 +273,29 @@ router.put('/', isLoggedIn, async (req, res, next) => {
             phoneNumber: user.phoneNumber,
             address: user.address,
          },
+      })
+   } catch (error) {
+      next(error)
+   }
+})
+
+// 비밀번호 확인
+router.post('/verify', isLoggedIn, async (req, res, next) => {
+   try {
+      const user = await User.findByPk(req.user.id)
+      const { password } = req.body
+      if (!user) {
+         return res.status(404).json({ message: '회원 정보를 찾을 수 없습니다.' })
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password)
+      if (!isMatch) {
+         return res.status(401).json({ message: '비밀번호가 일치하지 않습니다.' })
+      }
+
+      res.status(200).json({
+         message: '비밀번호 확인에 성공했습니다.',
+         success: true,
       })
    } catch (error) {
       next(error)
