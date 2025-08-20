@@ -20,7 +20,7 @@ const tokenRouter = require('./routes/token')
 const reviewRouter = require('./routes/review')
 const cartRouter = require('./routes/cart')
 const petRouter = require('./routes/pet')
-const likeRouter =require('./routes/like')
+const likeRouter = require('./routes/like')
 const { sequelize } = require('./models')
 const passportConfig = require('./passport')
 
