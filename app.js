@@ -55,7 +55,7 @@ app.use(morgan('dev'))
 // 업로드 파일은 /uploads 경로로 접근 (절대경로 보장)
 const uploadsDir = path.join(__dirname, 'uploads')
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
-app.use('/uploads', express.static(uploadsDir))
+app.use(express.static(uploadsDir))
 
 // (선택) 레거시 파일명 폴백: /hero_*.jpg → /uploads/hero_*.jpg
 app.get(/^\/(?:[^\/]+\.(?:png|jpe?g|webp|gif|svg))$/i, (req, res, next) => {

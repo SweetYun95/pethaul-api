@@ -203,7 +203,6 @@ router.get('/googlecheck', (req, res) => {
 router.post('/findid', isNotLoggedIn, async (req, res, next) => {
    try {
       const { phoneNumber } = req.body
-      console.log('🎀phoneNumber:', phoneNumber)
       const users = await User.findAll({ where: { phoneNumber } })
 
       if (!users.length) {
