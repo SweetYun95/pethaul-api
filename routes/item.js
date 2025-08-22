@@ -107,6 +107,10 @@ router.post('/', verifyToken, isAdmin, upload.array('img'), async (req, res, nex
  */
 router.get('/', verifyToken, async (req, res, next) => {
    try {
+      const page = parseInt(req.query.page, 10) || 1
+      const limit = parseInt(req.query.limit, 10) || 5
+      const offset = (page - 1) * limit
+
       const searchTerm = req.query.searchTerm || ''
       let sellCategory = req.query.sellCategory ?? req.query['sellCategory[]'] ?? null
 
@@ -136,10 +140,30 @@ router.get('/', verifyToken, async (req, res, next) => {
                }),
          },
       ]
+      // 전체 상품 갯수
+      const count = await Item.count({
+         where: whereClause,
+      })
 
-      const items = await Item.findAll({ where: whereClause, order: [['createdAt', 'DESC']], include: includeModels })
+      const items = await Item.findAll({
+         where: whereClause,
+         limit,
+         offset,
+         order: [['createdAt', 'DESC']],
+         include: includeModels,
+      })
 
-      return res.json({ success: true, message: '상품 목록 조회 성공', items })
+      return res.json({
+         success: true,
+         message: '상품 목록 조회 성공',
+         items,
+         pagination: {
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            limit,
+         },
+      })
    } catch (error) {
       error.status = error.status || 500
       error.message = '상품 목록 불러오기 실패'
