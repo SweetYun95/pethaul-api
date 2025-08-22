@@ -156,10 +156,6 @@ router.delete('/:id', isLoggedIn, async (req, res, next) => {
  */
 router.get('/', isLoggedIn, async (req, res, next) => {
    try {
-      // const page = parseInt(req.query.page, 10) || 1
-      // const limit = parseInt(req.query.limit, 10) || 5
-      // const offset = (page - 1) * limit
-
       const count = await Review.count({
          where: {
             userId: req.user.id,
