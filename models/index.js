@@ -2,6 +2,7 @@ const Sequelize = require('sequelize')
 const env = process.env.NODE_ENV || 'development'
 const config = require('../config/config')[env]
 
+// Models
 const User = require('./user')
 const Item = require('./item')
 const Cart = require('./cart')
@@ -16,8 +17,7 @@ const ReviewImage = require('./reviewImage')
 const Pet = require('./pet')
 const PetImage = require('./petImage')
 const Domain = require('./domain')
-const petImage = require('./petImage')
-const Like =require('./like')
+const Like = require('./like')
 const Content = require('./content')
 
 const db = {}
@@ -25,25 +25,34 @@ const sequelize = new Sequelize(config.database, config.username, config.passwor
 
 db.sequelize = sequelize
 
+// Expose models on db
+/*
 db.User = User
 db.Item = Item
 db.Cart = Cart
-db.CartItem = CartItem
-db.Category = Category
-db.ItemCategory = ItemCategory
-db.Order = Order
-db.OrderItem = OrderItem
-db.ItemImage = ItemImage
-db.Review = Review
-db.ReviewImage = ReviewImage
-db.Pet = Pet
-db.PetImage = PetImage
-db.Domain = Domain
-db.PetImage = PetImage
-db.Like = Like
-db.Content = Content
+... 이하 동일
+과 같은 역할
+*/
+Object.assign(db, {
+   User,
+   Item,
+   Cart,
+   CartItem,
+   Category,
+   ItemCategory,
+   Order,
+   OrderItem,
+   ItemImage,
+   Review,
+   ReviewImage,
+   Pet,
+   PetImage,
+   Domain,
+   Like,
+   Content,
+})
 
-
+// Initialize
 User.init(sequelize)
 Item.init(sequelize)
 Cart.init(sequelize)
@@ -56,11 +65,12 @@ ItemImage.init(sequelize)
 Review.init(sequelize)
 ReviewImage.init(sequelize)
 Pet.init(sequelize)
+PetImage.init(sequelize)
 Domain.init(sequelize)
-petImage.init(sequelize)
 Like.init(sequelize)
 Content.init(sequelize)
 
+// Associate
 User.associate(db)
 Item.associate(db)
 Cart.associate(db)
@@ -73,8 +83,8 @@ ItemImage.associate(db)
 Review.associate(db)
 ReviewImage.associate(db)
 Pet.associate(db)
+PetImage.associate(db)
 Domain.associate(db)
-petImage.associate(db)
 Like.associate(db)
 Content.associate?.(db)
 

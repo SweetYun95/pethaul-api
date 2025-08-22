@@ -1,22 +1,74 @@
-// models/content.js
-module.exports = (sequelize, DataTypes) => {
-  const Content = sequelize.define('Content', {
-    title:      { type: DataTypes.STRING(200), allowNull: false },
-    summary:    { type: DataTypes.STRING(500), allowNull: false },
-    body:       { type: DataTypes.TEXT, allowNull: true },
-    tag:        { type: DataTypes.STRING(50), allowNull: true }, // GUIDE/TREND/ETC
-    author:     { type: DataTypes.STRING(50), allowNull: true },
-    coverUrl:   { type: DataTypes.STRING(500), allowNull: true },
-    thumbUrl:   { type: DataTypes.STRING(500), allowNull: true },
-    isFeatured: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-    status:     { type: DataTypes.ENUM('draft','published'), allowNull: false, defaultValue: 'published' },
-    publishedAt:{ type: DataTypes.DATE, allowNull: true },
-    slug:       { type: DataTypes.STRING(200), allowNull: true, unique: true },
-  }, {
-    tableName: 'contents',
-    timestamps: true,
-  })
+// modules/content.js
+const Sequelize = require('sequelize')
 
-  return Content
+module.exports = class Content extends Sequelize.Model {
+   static init(sequelize) {
+      return super.init(
+         {
+            title: {
+               type: Sequelize.STRING(200),
+               allowNull: false,
+            },
+            summary: {
+               type: Sequelize.STRING(500),
+               allowNull: false,
+            },
+            body: {
+               type: Sequelize.TEXT,
+               allowNull: true,
+            },
+            tag: {
+               type: Sequelize.STRING(50), // GUIDE / TREND / ETC 등
+               allowNull: true,
+            },
+            author: {
+               type: Sequelize.STRING(50),
+               allowNull: true,
+            },
+            coverUrl: {
+               type: Sequelize.STRING(500),
+               allowNull: true,
+            },
+            thumbUrl: {
+               type: Sequelize.STRING(500),
+               allowNull: true,
+            },
+            isFeatured: {
+               type: Sequelize.BOOLEAN,
+               allowNull: false,
+               defaultValue: false,
+            },
+            status: {
+               type: Sequelize.ENUM('draft', 'published'),
+               allowNull: false,
+               defaultValue: 'published',
+            },
+            publishedAt: {
+               type: Sequelize.DATE,
+               allowNull: true,
+            },
+            slug: {
+               type: Sequelize.STRING(200),
+               allowNull: true,
+               unique: true,
+            },
+         },
+         {
+            sequelize,
+            timestamps: true, // createdAt, updatedAt
+            underscored: false,
+            modelName: 'Content',
+            tableName: 'contents',
+            paranoid: false, // deletedAt 미사용
+            charset: 'utf8mb4',
+            collate: 'utf8mb4_general_ci',
+         }
+      )
+   }
+
+   static associate(db) {
+      // 연관 관계가 생기면 여기서 정의 (예시)
+      // Content.belongsTo(db.User, { foreignKey: 'authorId', targetKey: 'id' })
+      // Content.hasMany(db.Comment, { foreignKey: 'contentId', sourceKey: 'id' })
+   }
 }
-
