@@ -79,6 +79,7 @@ module.exports = class Item extends Sequelize.Model {
          through: db.OrderItem,
          foreignKey: 'itemId',
          otherKey: 'orderId',
+         as: 'Orders',
       })
       Item.hasMany(db.Like, { foreignKey: 'itemId', sourceKey: 'id', onDelete: 'CASCADE' })
    }

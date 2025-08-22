@@ -154,62 +154,68 @@ router.get('/all/main', async (req, res, next) => {
    try {
       const limit = Number(req.query.limit)
 
-      // 1) 전체 판매량 기준
+      // // 1) 전체 판매량 기준
       const topSales = await Item.findAll({
-         attributes: [
-            ['id', 'itemId'],
-            ['itemNm', 'itemNm'],
-            ['price', 'price'],
-            [fn('SUM', col('Orders->OrderItem.count')), 'totalCount'],
-            [col('ItemImages.imgUrl'), 'itemImgUrl'],
-         ],
+         attributes: ['id', 'itemNm', 'price', 'itemSellStatus', [fn('SUM', col('OrderItems.count')), 'sellCount']],
          include: [
-            { model: Order, attributes: [], through: { attributes: [] } },
-            { model: ItemImage, attributes: [], required: false, where: { repImgYn: 'Y' } },
+            { model: OrderItem, attributes: [] },
+            {
+               model: ItemImage,
+               attributes: ['oriImgName', 'imgUrl', 'repImgYn'],
+               where: { repImgYn: 'Y' },
+               required: false,
+            },
          ],
-         group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
-         order: [[fn('SUM', col('Orders->OrderItem.count')), 'DESC']],
-         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
+         group: ['Item.id', 'Item.itemNm', 'Item.price', 'Item.itemSellStatus', 'ItemImages.id'],
+         order: [[col('sellCount'), 'DESC']],
+         ...(limit > 0 ? { limit } : {}),
          subQuery: false,
       })
 
-      // 2) 오늘 주문 건수 기준
+      // // 2) 오늘 주문 건수 기준
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
       const topToday = await Item.findAll({
-         attributes: [
-            ['id', 'itemId'],
-            ['itemNm', 'itemNm'],
-            ['price', 'price'],
-            [fn('COUNT', fn('DISTINCT', col('OrderItems.orderId'))), 'orderCount'],
-            [col('ItemImages.imgUrl'), 'itemImgUrl'],
-         ],
+         attributes: ['id', 'itemNm', 'price', 'itemSellStatus', [fn('COUNT', col('OrderItems.itemId')), 'orderCount']],
+
          include: [
             {
                model: OrderItem,
                attributes: [],
                include: [{ model: Order, attributes: [], where: { orderDate: { [Op.gte]: today } } }],
+               required: true,
             },
-            { model: ItemImage, attributes: [], required: false, where: { repImgYn: 'Y' } },
+
+            { model: ItemImage, attributes: ['oriImgName', 'imgUrl', 'repImgYn'], where: { repImgYn: 'Y' }, required: false },
          ],
-         group: ['Item.id', 'Item.itemNm', 'Item.price', 'ItemImages.imgUrl'],
-         order: [['orderCount', 'DESC']],
-         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
+         group: ['Item.id', 'Item.itemNm', 'Item.price', 'Item.itemSellStatus', 'ItemImages.id'],
+
+         order: [[col('orderCount'), 'DESC']],
+         ...(limit > 0 ? { limit } : {}),
          subQuery: false,
       })
 
       // 3) 최신 등록 상품
+      const includeModels = [
+         { model: ItemImage, attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn'] },
+         {
+            model: Category,
+            attributes: ['id', 'categoryName'],
+         },
+      ]
+
       const newItems = await Item.findAll({
-         attributes: ['id', 'itemNm', 'price', 'createdAt', [col('ItemImages.imgUrl'), 'itemImgUrl']],
-         include: [{ model: ItemImage, attributes: [], required: false, where: { repImgYn: 'Y' } }],
          order: [['createdAt', 'DESC']],
-         ...(!isNaN(limit) && limit > 0 ? { limit } : {}),
-         raw: false,
-         subQuery: false,
+         include: includeModels,
+         ...(limit > 0 ? { limit } : {}),
       })
 
-      return res.json({ topSales, topToday, newItems })
+      return res.json({
+         topSales,
+         topToday,
+         newItems,
+      })
    } catch (error) {
       error.status = error.status || 500
       error.message = '메인 상품 목록 불러오기 실패'
