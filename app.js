@@ -21,11 +21,14 @@ const reviewRouter = require('./routes/review')
 const cartRouter = require('./routes/cart')
 const petRouter = require('./routes/pet')
 const likeRouter = require('./routes/like')
+const contentRouter = require('./routes/content') // ★ 추가
 const { sequelize } = require('./models')
 const passportConfig = require('./passport')
 
 const app = express()
 passportConfig()
+
+// 👉 포트: .env에 PORT 없으면 기본 8002
 app.set('port', process.env.PORT || 8002)
 
 // 시퀄라이즈를 사용한 DB연결
@@ -35,10 +38,10 @@ sequelize
       console.log(' 🛠 데이터베이스 연결 성공')
    })
    .catch((err) => {
-      console.error(err) //연결 실패시 오류 출력
+      console.error(err)
    })
 
-//미들웨어 설정
+// 미들웨어 설정
 app.use(
    cors({
       origin: process.env.FRONTEND_APP_URL, // 프론트엔드 URL
@@ -46,26 +49,28 @@ app.use(
    })
 )
 app.use(morgan('dev'))
-app.use(express.static(path.join(__dirname, 'uploads')))
+
+// 업로드 파일은 /uploads 경로로 접근
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
-app.use(cookieParser(process.env.COOKIE_SECRET)) // 쿠키 설정
+app.use(cookieParser(process.env.COOKIE_SECRET))
 
 // 세션 설정
 const sessionMiddleware = session({
-   resave: false, // 세션이 변경되지 않으면 다시 저장하지 않음
-   saveUninitialized: false, // 세션이 초기화되지 않은 상태로 저장되지 않음
-   secret: process.env.COOKIE_SECRET, // 쿠키의 암호화 키
+   resave: false,
+   saveUninitialized: false,
+   secret: process.env.COOKIE_SECRET,
    cookie: {
-      httpOnly: true, // 자바스크립트에서 쿠키 접근 불가
-      secure: process.env.NODE_ENV === 'production', // HTTPS에서는 true로 설정해야 함
-      maxAge: 1000 * 60 * 60 * 24, // 쿠키의 유효기간 (1일)
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24, // 1일
    },
 })
-
 app.use(sessionMiddleware)
 
-//Passport 초기화, 세션 연동
+// Passport 초기화, 세션 연동
 app.use(passport.initialize())
 app.use(passport.session())
 
@@ -79,12 +84,7 @@ app.use('/review', reviewRouter)
 app.use('/cart', cartRouter)
 app.use('/pets', petRouter)
 app.use('/like', likeRouter)
-
-// HTTP 서버 생성
-// const server = http.createServer(app)
-
-// Socket.IO 초기화 및 서버와 연결, 세션을 사용하기 위해 sessionMiddleware 전송
-// socketIO(server, sessionMiddleware)
+app.use('/contents', contentRouter) // ★ contents API 등록
 
 // 잘못된 라우터 경로 처리
 app.use((req, res, next) => {
@@ -93,12 +93,11 @@ app.use((req, res, next) => {
    next(error)
 })
 
-// 에러 미들웨어(미들웨어 실행 중 발생하는 에러를 처리함)
+// 에러 미들웨어
 app.use((err, req, res, next) => {
    const statusCode = err.status || 500
    const errorMessage = err.message || '서버 내부 오류'
 
-   //개발 중 서버 콘솔에서 상세한 에러 확인 용도
    if (process.env.NODE_ENV === 'development') {
       console.log(err)
    }
@@ -113,7 +112,3 @@ app.use((err, req, res, next) => {
 app.listen(app.get('port'), () => {
    console.log(app.get('port'), '번 포트에서 대기중')
 })
-
-// server.listen(app.get('port'), () => {
-//    console.log(app.get('port'), '번 포트에서 대기중')
-// })
