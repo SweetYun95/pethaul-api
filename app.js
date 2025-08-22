@@ -1,4 +1,4 @@
-// pethaul-api/app.js
+// pethaul-api/app.js — add static fallback & trust proxy (optional)
 const express = require('express')
 const path = require('path')
 const cookieParser = require('cookie-parser')
@@ -7,9 +7,7 @@ const session = require('express-session')
 const passport = require('passport')
 require('dotenv').config()
 const cors = require('cors')
-// const { swaggerUi, swaggerSpec } = require('./swagger')
-// const http = require('http')
-// const socketIO = require('./socket')
+const fs = require('fs')
 
 // 라우터 및 기타 모듈 불러오기
 const indexRouter = require('./routes/index')
@@ -27,6 +25,10 @@ const passportConfig = require('./passport')
 
 const app = express()
 passportConfig()
+
+// (선택) 프록시 환경에서 올바른 프로토콜/호스트 계산을 위해
+// Nginx/Render/Heroku 등 프록시 뒤라면 1 이상으로
+// app.set('trust proxy', 1)
 
 // 👉 포트: .env에 PORT 없으면 기본 8002
 app.set('port', process.env.PORT || 8002)
@@ -50,8 +52,20 @@ app.use(
 )
 app.use(morgan('dev'))
 
-// 업로드 파일은 /uploads 경로로 접근
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+// 업로드 파일은 /uploads 경로로 접근 (절대경로 보장)
+const uploadsDir = path.join(__dirname, 'uploads')
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+app.use('/uploads', express.static(uploadsDir))
+
+// (선택) 레거시 파일명 폴백: /hero_*.jpg → /uploads/hero_*.jpg
+app.get(/^\/(?:[^\/]+\.(?:png|jpe?g|webp|gif|svg))$/i, (req, res, next) => {
+   const filename = req.path.slice(1)
+   const abs = path.join(uploadsDir, filename)
+   fs.access(abs, fs.constants.R_OK, (err) => {
+      if (err) return next()
+      res.sendFile(abs)
+   })
+})
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))

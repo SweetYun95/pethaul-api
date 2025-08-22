@@ -103,7 +103,7 @@ router.get('/', async (req, res, next) => {
 })
 
 // [GET] /contents/:id (pk 기반)
-router.get('/:id(\\d+)', async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
    try {
       const row = await Content.findByPk(req.params.id)
       if (!row || row.status !== 'published') return res.status(404).json({ message: 'Not found' })
