@@ -1,3 +1,4 @@
+// models/reviewImage.js
 const Sequelize = require('sequelize')
 
 module.exports = class ReviewImage extends Sequelize.Model {
