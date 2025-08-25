@@ -64,8 +64,17 @@ router.post('/', isLoggedIn, async (req, res, next) => {
  */
 router.get('/', isLoggedIn, async (req, res, next) => {
    try {
+      const page = parseInt(req.query.page, 10) || 1
+      const limit = parseInt(req.query.limit, 10) || 5
+      const offset = (page - 1) * limit
+
+      const count = await Order.count({
+         where: { userId: req.user.id },
+      })
       const orders = await Order.findAll({
          where: { userId: req.user.id },
+         limit,
+         offset,
          include: [
             {
                model: Item,
@@ -87,6 +96,12 @@ router.get('/', isLoggedIn, async (req, res, next) => {
          success: true,
          message: '주문목록 조회 성공',
          orders,
+         pagination: {
+            totalOrders: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            limit,
+         },
       })
    } catch (err) {
       err.status = err.status || 500
