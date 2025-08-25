@@ -156,6 +156,10 @@ router.delete('/:id', isLoggedIn, async (req, res, next) => {
  */
 router.get('/', isLoggedIn, async (req, res, next) => {
    try {
+      const page = parseInt(req.query.page, 10) || 1
+      const limit = parseInt(req.query.limit, 10) || 5
+      const offset = (page - 1) * limit
+
       const count = await Review.count({
          where: {
             userId: req.user.id,
@@ -164,8 +168,8 @@ router.get('/', isLoggedIn, async (req, res, next) => {
 
       const review = await Review.findAll({
          where: { userId: req.user.id },
-         // limit,
-         // offset,
+         limit,
+         offset,
          include: [
             {
                model: Item,
@@ -187,12 +191,12 @@ router.get('/', isLoggedIn, async (req, res, next) => {
          success: true,
          message: '회원이 작성한 리뷰를 성공적으로 불러왔습니다.',
          review,
-         // pagination: {
-         //    totalReview: count,
-         //    totalPages: Math.ceil(count / limit),
-         //    currentPage: page,
-         //    limit,
-         // },
+         pagination: {
+            totalReview: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            limit,
+         },
       })
    } catch (error) {
       error.status = error.status || 500
