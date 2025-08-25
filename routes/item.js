@@ -4,7 +4,7 @@ const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
 const { Item, ItemImage, Category, ItemCategory, Review, ReviewImage, User, Order, OrderItem } = require('../models')
-const { isAdmin, verifyToken } = require('./middlewares')
+const { isAdmin, verifyToken, isLoggedIn } = require('./middlewares')
 const { Op, col, fn } = require('sequelize')
 
 const router = express.Router()
@@ -358,6 +358,39 @@ router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
       error.status = error.status || 500
       error.message = '상품 삭제 실패'
       return next(error)
+   }
+})
+
+/**
+ * 7. 추천 상품 조회
+ */
+router.post('/recommend', async (req, res, next) => {
+   try {
+      const { items } = req.body
+
+      if (!items || items.length === 0) {
+         return res.status(204).json({ message: '추천할 상품이 없습니다.' })
+      }
+
+      const result = await Item.findAll({
+         where: { id: { [Op.in]: items } },
+         include: [
+            {
+               model: ItemImage,
+               where: { repImgYn: 'Y' },
+               attributes: ['oriImgName', 'imgUrl'],
+            },
+         ],
+      })
+
+      return res.status(200).json({
+         success: true,
+         message: '추천 상품 조회에 성공했습니다.',
+         result,
+      })
+   } catch (err) {
+      console.error(err)
+      return next(err)
    }
 })
 
