@@ -74,11 +74,5 @@ module.exports = class Content extends Sequelize.Model {
          onDelete: 'SET NULL',
          onUpdate: 'CASCADE',
       })
-      Content.hasMany(db.ContentImage, {
-         foreignKey: 'contentId',
-         sourceKey: 'id',
-         onDelete: 'SET NULL',
-         onUpdate: 'CASCADE',
-      })
    }
 }

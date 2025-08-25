@@ -1,7 +1,7 @@
-// routes/content.js — finalized with ContentImage upload
+// routes/content.js
 const express = require('express')
 const { Op } = require('sequelize')
-const { Content, User, ContentImage } = require('../models') // ★ ContentImage 추가
+const { Content, User } = require('../models')
 const { isAdmin, verifyToken } = require('./middlewares')
 const multer = require('multer')
 const path = require('path')
@@ -9,7 +9,7 @@ const fs = require('fs')
 
 const router = express.Router()
 
-// -------- uploads 디렉토리 절대 경로 통일 --------
+// ---------- uploads dir (absolute) ----------
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads')
 try {
    if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
@@ -26,7 +26,6 @@ const storage = multer.diskStorage({
          const decoded = decodeURIComponent(file.originalname)
          const ext = path.extname(decoded)
          const basename = path.basename(decoded, ext)
-         // 파일명 ASCII 슬러그화(선택) — 한글/공백 안전
          const safeBase = basename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]+/g, '') || 'upload'
          cb(null, `${safeBase}-${Date.now()}${ext}`)
       } catch {
@@ -37,7 +36,7 @@ const storage = multer.diskStorage({
 })
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } })
 
-// 유틸: BASE URL 계산 (환경변수 없으면 요청정보 사용)
+// ---------- utils ----------
 function getBaseUrl(req) {
    if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '')
    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'
@@ -45,22 +44,14 @@ function getBaseUrl(req) {
    return `${proto}://${host}`
 }
 
-// 공통 include (작성자 조인) — 모델에 alias('Author')를 선언하지 않았다면 as 제거하세요.
+// Join descriptor for author (no alias unless your model uses one)
 const AUTHOR_INCLUDE = {
    model: User,
-   // as: 'Author', // ← 모델에서 Content.belongsTo(User, { as:'Author', ... })를 썼을 때만 사용
    attributes: ['id', 'userId', 'name', 'email', 'role'],
    required: false,
 }
 
-// 공통 include (이미지 조인) — as 사용 안 함
-const IMAGES_INCLUDE = {
-   model: ContentImage,
-   attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn', 'createdAt'],
-   required: false,
-}
-
-// [GET] /contents?page=1&size=10&tag=GUIDE&q=키워드
+// ---------- GET /contents ----------
 router.get('/', async (req, res, next) => {
    try {
       const pageRaw = parseInt(`${req.query.page || 1}`, 10)
@@ -81,7 +72,7 @@ router.get('/', async (req, res, next) => {
       const offset = (page - 1) * size
       const { rows, count } = await Content.findAndCountAll({
          where,
-         include: [AUTHOR_INCLUDE, IMAGES_INCLUDE],
+         include: [AUTHOR_INCLUDE],
          order: [
             ['isFeatured', 'DESC'],
             ['publishedAt', 'DESC'],
@@ -91,24 +82,16 @@ router.get('/', async (req, res, next) => {
          offset,
       })
 
-      res.json({
-         list: rows,
-         page,
-         size,
-         total: count,
-         hasMore: page * size < count,
-      })
+      res.json({ list: rows, page, size, total: count, hasMore: page * size < count })
    } catch (err) {
       next(err)
    }
 })
 
-// [GET] /contents/:id (pk 기반)
+// ---------- GET /contents/:id ----------
 router.get('/:id', async (req, res, next) => {
    try {
-      const row = await Content.findByPk(req.params.id, {
-         include: [AUTHOR_INCLUDE, IMAGES_INCLUDE],
-      })
+      const row = await Content.findByPk(req.params.id, { include: [AUTHOR_INCLUDE] })
       if (!row || row.status !== 'published') return res.status(404).json({ message: 'Not found' })
       res.json(row)
    } catch (err) {
@@ -116,14 +99,11 @@ router.get('/:id', async (req, res, next) => {
    }
 })
 
-// [GET] /contents/slug/:slug (slug 기반 단건)
+// ---------- GET /contents/slug/:slug ----------
 router.get('/slug/:slug', async (req, res, next) => {
    try {
       const slug = `${req.params.slug}`
-      const row = await Content.findOne({
-         where: { slug, status: 'published' },
-         include: [AUTHOR_INCLUDE, IMAGES_INCLUDE],
-      })
+      const row = await Content.findOne({ where: { slug, status: 'published' }, include: [AUTHOR_INCLUDE] })
       if (!row) return res.status(404).json({ message: 'Not found' })
       res.json(row)
    } catch (err) {
@@ -131,7 +111,7 @@ router.get('/slug/:slug', async (req, res, next) => {
    }
 })
 
-// [POST] /contents (관리자) — 작성자 자동 주입
+// ---------- POST /contents (admin) ----------
 router.post('/', verifyToken, isAdmin, async (req, res, next) => {
    try {
       const payload = req.body || {}
@@ -139,6 +119,7 @@ router.post('/', verifyToken, isAdmin, async (req, res, next) => {
       const status = payload.status === 'draft' ? 'draft' : 'published'
       const publishedAt = status === 'published' ? payload.publishedAt || new Date() : null
 
+      // author auto-fill
       const authorId = Number.isFinite(+payload.authorId) ? +payload.authorId : req.user?.id ?? null
       const author = (payload.author && `${payload.author}`.trim()) || req.user?.name || null
 
@@ -156,7 +137,7 @@ router.post('/', verifyToken, isAdmin, async (req, res, next) => {
    }
 })
 
-// [PUT] /contents/:id (관리자)
+// ---------- PUT /contents/:id (admin) ----------
 router.put('/:id', verifyToken, isAdmin, async (req, res, next) => {
    try {
       const row = await Content.findByPk(req.params.id)
@@ -177,7 +158,7 @@ router.put('/:id', verifyToken, isAdmin, async (req, res, next) => {
    }
 })
 
-// [DELETE] /contents/:id (관리자)
+// ---------- DELETE /contents/:id (admin) ----------
 router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
    try {
       const row = await Content.findByPk(req.params.id)
@@ -189,62 +170,13 @@ router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
    }
 })
 
-/**
- * [POST] /contents/:id/images  (관리자)
- * - 본문과 별도로 이미지 등록 (contentImages 테이블에 레코드 생성)
- * - Body: multipart/form-data (field name: image), rep(optional 'Y'|'N')
- */
-router.post('/:id/images', verifyToken, isAdmin, upload.single('image'), async (req, res, next) => {
-   try {
-      if (!req.file) return res.status(400).json({ message: 'No file uploaded' })
-
-      const contentId = +req.params.id
-      const base = getBaseUrl(req)
-      const url = `${base}/uploads/${req.file.filename}` // 인코딩 X
-
-      // 존재 확인(선택)
-      const content = await Content.findByPk(contentId)
-      if (!content) return res.status(404).json({ message: 'Content not found' })
-
-      // 대표 지정이 'Y'로 오면 기존 대표 초기화(선택 로직)
-      if (req.body.rep === 'Y') {
-         await ContentImage.update({ repImgYn: 'N' }, { where: { contentId } })
-      }
-
-      const img = await ContentImage.create({
-         contentId,
-         oriImgName: req.file.originalname,
-         imgUrl: url,
-         repImgYn: req.body.rep === 'Y' ? 'Y' : 'N',
-      })
-
-      res.status(201).json(img)
-   } catch (err) {
-      next(err)
-   }
-})
-
-/**
- * [DELETE] /contents/:id/images/:imageId  (관리자)
- */
-router.delete('/:id/images/:imageId', verifyToken, isAdmin, async (req, res, next) => {
-   try {
-      const { id, imageId } = req.params
-      const img = await ContentImage.findOne({ where: { id: imageId, contentId: id } })
-      if (!img) return res.status(404).json({ message: 'Image not found' })
-      await img.destroy()
-      res.json({ ok: true })
-   } catch (err) {
-      next(err)
-   }
-})
-
-// [POST] /contents/images — 단독 이미지 업로드(경로만 발급, 콘텐츠 미연결)
+// ---------- POST /contents/images (admin) ----------
+// returns { url } for use as coverUrl/thumbUrl on create/update
 router.post('/images', verifyToken, isAdmin, upload.single('image'), (req, res, next) => {
    try {
       if (!req.file) return res.status(400).json({ message: 'No file uploaded' })
       const base = getBaseUrl(req)
-      const url = `${base}/uploads/${req.file.filename}` // 인코딩 X
+      const url = `${base}/uploads/${encodeURIComponent(req.file.filename)}`
       res.status(201).json({ url })
    } catch (err) {
       next(err)
