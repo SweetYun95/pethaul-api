@@ -25,6 +25,7 @@ module.exports = class Content extends Sequelize.Model {
                type: Sequelize.STRING(50),
                allowNull: true,
             },
+            authorId: { type: Sequelize.INTEGER, allowNull: true },
             coverUrl: {
                type: Sequelize.STRING(500),
                allowNull: true,
@@ -67,8 +68,17 @@ module.exports = class Content extends Sequelize.Model {
    }
 
    static associate(db) {
-      // 연관 관계가 생기면 여기서 정의 (예시)
-      // Content.belongsTo(db.User, { foreignKey: 'authorId', targetKey: 'id' })
-      // Content.hasMany(db.Comment, { foreignKey: 'contentId', sourceKey: 'id' })
+      Content.belongsTo(db.User, {
+         foreignKey: 'authorId',
+         targetKey: 'id',
+         onDelete: 'SET NULL',
+         onUpdate: 'CASCADE',
+      })
+      Content.hasMany(db.ContentImage, {
+         foreignKey: 'contentId',
+         sourceKey: 'id',
+         onDelete: 'SET NULL',
+         onUpdate: 'CASCADE',
+      })
    }
 }

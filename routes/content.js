@@ -1,17 +1,7 @@
-// routes/content.js — reviewed & patched
-// 주요 변경 요약:
-// 1) 업로드 경로를 절대경로로 통일 (multer storage ↔ static served path 일치)
-// 2) 파일 업로드 시 req.file 미존재 처리 및 응답 형식 강화
-// 3) 쿼리 파싱 보강: page/size 안전 파싱, tag/q trim
-// 4) 검색 like 안전 처리 (콜레이션이 ci라면 그대로 OK, 필요 시 LOWER 비교로 교체 가능)
-// 5) 단건 조회에 slug 지원(선택): GET /contents/slug/:slug
-// 6) publishedAt 자동 설정 로직 유지하되 payload.status 검증 추가
-// 7) try/catch 에서 next(err) 일관 처리
-// 8) 관리자 전용 라우트는 verifyToken → isAdmin 순서 유지
-
+// routes/content.js — finalized with ContentImage upload
 const express = require('express')
-const { Op, Sequelize } = require('sequelize')
-const { Content } = require('../models')
+const { Op } = require('sequelize')
+const { Content, User, ContentImage } = require('../models') // ★ ContentImage 추가
 const { isAdmin, verifyToken } = require('./middlewares')
 const multer = require('multer')
 const path = require('path')
@@ -36,19 +26,16 @@ const storage = multer.diskStorage({
          const decoded = decodeURIComponent(file.originalname)
          const ext = path.extname(decoded)
          const basename = path.basename(decoded, ext)
-         cb(null, `${basename}-${Date.now()}${ext}`)
-      } catch (_) {
-         // 파일명이 깨지는 극단 케이스 대비
+         // 파일명 ASCII 슬러그화(선택) — 한글/공백 안전
+         const safeBase = basename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]+/g, '') || 'upload'
+         cb(null, `${safeBase}-${Date.now()}${ext}`)
+      } catch {
          const ext = path.extname(file.originalname || '')
          cb(null, `upload-${Date.now()}${ext}`)
       }
    },
 })
-
-const upload = multer({
-   storage,
-   limits: { fileSize: 10 * 1024 * 1024 },
-})
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } })
 
 // 유틸: BASE URL 계산 (환경변수 없으면 요청정보 사용)
 function getBaseUrl(req) {
@@ -56,6 +43,21 @@ function getBaseUrl(req) {
    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'
    const host = req.get('host')
    return `${proto}://${host}`
+}
+
+// 공통 include (작성자 조인) — 모델에 alias('Author')를 선언하지 않았다면 as 제거하세요.
+const AUTHOR_INCLUDE = {
+   model: User,
+   // as: 'Author', // ← 모델에서 Content.belongsTo(User, { as:'Author', ... })를 썼을 때만 사용
+   attributes: ['id', 'userId', 'name', 'email', 'role'],
+   required: false,
+}
+
+// 공통 include (이미지 조인) — as 사용 안 함
+const IMAGES_INCLUDE = {
+   model: ContentImage,
+   attributes: ['id', 'oriImgName', 'imgUrl', 'repImgYn', 'createdAt'],
+   required: false,
 }
 
 // [GET] /contents?page=1&size=10&tag=GUIDE&q=키워드
@@ -73,14 +75,13 @@ router.get('/', async (req, res, next) => {
 
       const q = (req.query.q || '').trim()
       if (q) {
-         // MySQL 기본 콜레이션이 ci(대소문자 구분 없음)라면 LIKE로 충분
          where[Op.or] = [{ title: { [Op.like]: `%${q}%` } }, { summary: { [Op.like]: `%${q}%` } }]
-         // Postgres 등 사용 시 iLike 고려: { [Op.iLike]: `%${q}%` }
       }
 
       const offset = (page - 1) * size
       const { rows, count } = await Content.findAndCountAll({
          where,
+         include: [AUTHOR_INCLUDE, IMAGES_INCLUDE],
          order: [
             ['isFeatured', 'DESC'],
             ['publishedAt', 'DESC'],
@@ -105,7 +106,9 @@ router.get('/', async (req, res, next) => {
 // [GET] /contents/:id (pk 기반)
 router.get('/:id', async (req, res, next) => {
    try {
-      const row = await Content.findByPk(req.params.id)
+      const row = await Content.findByPk(req.params.id, {
+         include: [AUTHOR_INCLUDE, IMAGES_INCLUDE],
+      })
       if (!row || row.status !== 'published') return res.status(404).json({ message: 'Not found' })
       res.json(row)
    } catch (err) {
@@ -117,7 +120,10 @@ router.get('/:id', async (req, res, next) => {
 router.get('/slug/:slug', async (req, res, next) => {
    try {
       const slug = `${req.params.slug}`
-      const row = await Content.findOne({ where: { slug, status: 'published' } })
+      const row = await Content.findOne({
+         where: { slug, status: 'published' },
+         include: [AUTHOR_INCLUDE, IMAGES_INCLUDE],
+      })
       if (!row) return res.status(404).json({ message: 'Not found' })
       res.json(row)
    } catch (err) {
@@ -125,17 +131,21 @@ router.get('/slug/:slug', async (req, res, next) => {
    }
 })
 
-// [POST] /contents (관리자)
+// [POST] /contents (관리자) — 작성자 자동 주입
 router.post('/', verifyToken, isAdmin, async (req, res, next) => {
    try {
       const payload = req.body || {}
 
-      // status 값 검증
       const status = payload.status === 'draft' ? 'draft' : 'published'
       const publishedAt = status === 'published' ? payload.publishedAt || new Date() : null
 
+      const authorId = Number.isFinite(+payload.authorId) ? +payload.authorId : req.user?.id ?? null
+      const author = (payload.author && `${payload.author}`.trim()) || req.user?.name || null
+
       const row = await Content.create({
          ...payload,
+         authorId,
+         author,
          status,
          publishedAt,
       })
@@ -156,12 +166,11 @@ router.put('/:id', verifyToken, isAdmin, async (req, res, next) => {
       const status = payload.status === 'draft' ? 'draft' : payload.status === 'published' ? 'published' : row.status
       const publishedAt = status === 'published' ? payload.publishedAt || row.publishedAt || new Date() : null
 
-      await row.update({
-         ...payload,
-         status,
-         publishedAt,
-      })
+      const authorId = payload.authorId !== undefined ? (Number.isFinite(+payload.authorId) ? +payload.authorId : null) : row.authorId ?? req.user?.id ?? null
 
+      const author = (payload.author && `${payload.author}`.trim()) || row.author || req.user?.name || null
+
+      await row.update({ ...payload, authorId, author, status, publishedAt })
       res.json(row)
    } catch (err) {
       next(err)
@@ -180,12 +189,62 @@ router.delete('/:id', verifyToken, isAdmin, async (req, res, next) => {
    }
 })
 
-// [POST] /contents/images (관리자)
+/**
+ * [POST] /contents/:id/images  (관리자)
+ * - 본문과 별도로 이미지 등록 (contentImages 테이블에 레코드 생성)
+ * - Body: multipart/form-data (field name: image), rep(optional 'Y'|'N')
+ */
+router.post('/:id/images', verifyToken, isAdmin, upload.single('image'), async (req, res, next) => {
+   try {
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded' })
+
+      const contentId = +req.params.id
+      const base = getBaseUrl(req)
+      const url = `${base}/uploads/${req.file.filename}` // 인코딩 X
+
+      // 존재 확인(선택)
+      const content = await Content.findByPk(contentId)
+      if (!content) return res.status(404).json({ message: 'Content not found' })
+
+      // 대표 지정이 'Y'로 오면 기존 대표 초기화(선택 로직)
+      if (req.body.rep === 'Y') {
+         await ContentImage.update({ repImgYn: 'N' }, { where: { contentId } })
+      }
+
+      const img = await ContentImage.create({
+         contentId,
+         oriImgName: req.file.originalname,
+         imgUrl: url,
+         repImgYn: req.body.rep === 'Y' ? 'Y' : 'N',
+      })
+
+      res.status(201).json(img)
+   } catch (err) {
+      next(err)
+   }
+})
+
+/**
+ * [DELETE] /contents/:id/images/:imageId  (관리자)
+ */
+router.delete('/:id/images/:imageId', verifyToken, isAdmin, async (req, res, next) => {
+   try {
+      const { id, imageId } = req.params
+      const img = await ContentImage.findOne({ where: { id: imageId, contentId: id } })
+      if (!img) return res.status(404).json({ message: 'Image not found' })
+      await img.destroy()
+      res.json({ ok: true })
+   } catch (err) {
+      next(err)
+   }
+})
+
+// [POST] /contents/images — 단독 이미지 업로드(경로만 발급, 콘텐츠 미연결)
 router.post('/images', verifyToken, isAdmin, upload.single('image'), (req, res, next) => {
    try {
       if (!req.file) return res.status(400).json({ message: 'No file uploaded' })
       const base = getBaseUrl(req)
-      const url = `${base}/uploads/${encodeURIComponent(req.file.filename)}`
+      const url = `${base}/uploads/${req.file.filename}` // 인코딩 X
       res.status(201).json({ url })
    } catch (err) {
       next(err)
