@@ -2,7 +2,7 @@
 const express = require('express')
 const { Order, OrderItem, Item, ItemImage } = require('../models')
 const { isLoggedIn } = require('./middlewares')
-const { Op, col, fn } = require('sequelize')
+const { Op, col, fn, where } = require('sequelize')
 
 const router = express.Router()
 
@@ -83,7 +83,11 @@ router.get('/', isLoggedIn, async (req, res, next) => {
          ],
       })
 
-      return res.status(200).json({ success: true, message: '주문목록 조회 성공', orders })
+      return res.status(200).json({
+         success: true,
+         message: '주문목록 조회 성공',
+         orders,
+      })
    } catch (err) {
       err.status = err.status || 500
       err.message = '주문목록 조회 실패'
