@@ -1,8 +1,8 @@
 // routes/order.js
 const express = require('express')
-const { Order, OrderItem, Item, ItemImage } = require('../models')
+const { Order, OrderItem, Item, ItemImage, Cart } = require('../models')
 const { isLoggedIn } = require('./middlewares')
-const { Op, col, fn, where } = require('sequelize')
+const { Op, col, fn } = require('sequelize')
 
 const router = express.Router()
 
@@ -13,6 +13,7 @@ router.post('/', isLoggedIn, async (req, res, next) => {
    const t = await Order.sequelize.transaction()
    try {
       const { items } = req.body // [{ itemId, price, quantity }]
+      const cart = await Cart.findOne({ where: { userId }, include: [CartItem] })
       if (!items || items.length === 0) {
          const error = new Error('주문할 상품이 없습니다.')
          error.status = 400
@@ -48,6 +49,9 @@ router.post('/', isLoggedIn, async (req, res, next) => {
          product.stockNumber -= it.quantity
          await product.save({ transaction: t })
       }
+
+      // 장바구니 비우기
+      await CartItem.destroy({ where: { cartId: cart.id }, transaction: t })
 
       await t.commit()
       return res.status(201).json({ success: true, message: '주문이 완료되었습니다.', orderId: order.id })
