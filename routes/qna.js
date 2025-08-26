@@ -10,6 +10,9 @@ const router = express.Router()
 router.get('/', async (req, res, next) => {
    try {
       const { id, role } = req.query
+      const page = parseInt(req.query.page, 10) || 1
+      const limit = parseInt(req.query.limit, 10) || 10
+      const offset = (page - 1) * limit
 
       if (!id) {
          const error = new Error('회원 정보를 찾을 수 없습니다.')
@@ -18,22 +21,46 @@ router.get('/', async (req, res, next) => {
       }
 
       if (role === 'ADMIN') {
+         const count = await Qna.count()
          const data = await Qna.findAll({
             include: {
                model: User,
                attributes: ['id', 'userId', 'name'],
             },
+            limit,
+            offset,
+            order: [['createdAt', 'DESC']],
          })
-         res.json({ data })
+         res.json({
+            data,
+            pagination: {
+               totalQna: count,
+               totalPages: Math.ceil(count / limit),
+               currentPage: page,
+               limit,
+            },
+         })
       } else {
+         const count = await Qna.count({ where: { userId: id } })
          const data = await Qna.findAll({
             where: { userId: id },
             include: {
                model: User,
                attributes: ['id', 'userId', 'name'],
             },
+            limit,
+            offset,
+            order: [['createdAt', 'DESC']],
          })
-         res.json({ data })
+         res.json({
+            data,
+            pagination: {
+               totalQna: count,
+               totalPages: Math.ceil(count / limit),
+               currentPage: page,
+               limit,
+            },
+         })
       }
    } catch (error) {
       error.status = error.status || 500
@@ -95,6 +122,11 @@ router.put('/edit/:id', async (req, res, next) => {
          error.status = 404
          return next(error)
       }
+      if (qna.userId !== req.user.id) {
+         const error = new Error('권한이 없습니다.')
+         error.status = 403
+         return next(error)
+      }
       await qna.update({ title, content })
       res.status(200).json({
          message: '문의가 성공적으로 수정되었습니다.',
@@ -115,6 +147,7 @@ router.delete('/:id', async (req, res, next) => {
          error.status = 404
          return next(error)
       }
+
       if (req.user.role === 'USER') {
          if (qna.userId !== req.user.id) {
             const error = new Error('권한이 없습니다.')
