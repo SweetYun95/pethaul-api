@@ -89,7 +89,7 @@ Pet.associate(db)
 PetImage.associate(db)
 Domain.associate(db)
 Like.associate(db)
-Content.associate?.(db)
+Content.associate(db)
 Qna.associate(db)
 
 module.exports = db
