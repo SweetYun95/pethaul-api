@@ -20,6 +20,7 @@ const cartRouter = require('./routes/cart')
 const petRouter = require('./routes/pet')
 const likeRouter = require('./routes/like')
 const contentRouter = require('./routes/content')
+const qnaRouter = require('./routes/qna')
 const { sequelize } = require('./models')
 const passportConfig = require('./passport')
 
@@ -102,6 +103,7 @@ app.use('/cart', cartRouter)
 app.use('/pets', petRouter)
 app.use('/like', likeRouter)
 app.use('/contents', contentRouter)
+app.use('/qna', qnaRouter)
 
 // 404 handler
 app.use((req, res, next) => {
