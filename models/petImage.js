@@ -1,7 +1,6 @@
-// models/reviewImage.js
 const Sequelize = require('sequelize')
 
-module.exports = class ReviewImage extends Sequelize.Model {
+module.exports = class petImage extends Sequelize.Model {
    static init(sequelize) {
       return super.init(
          {
@@ -13,13 +12,18 @@ module.exports = class ReviewImage extends Sequelize.Model {
                type: Sequelize.STRING(255),
                allowNull: false,
             },
+            repImgYn: {
+               type: Sequelize.ENUM('Y', 'N'),
+               defaultValue: 'N',
+               allowNull: false,
+            },
          },
          {
             sequelize,
             timestamps: true,
             underscored: false,
-            modelName: 'ReviewImage',
-            tableName: 'reviewImages',
+            modelName: 'PetImage',
+            tableName: 'petImages',
             paranoid: false,
             charset: 'utf8mb4',
             collate: 'utf8mb4_general_ci',
@@ -27,8 +31,8 @@ module.exports = class ReviewImage extends Sequelize.Model {
       )
    }
    static associate(db) {
-      ReviewImage.belongsTo(db.Review, {
-         foreignKey: 'reviewId',
+      petImage.belongsTo(db.Pet, {
+         foreignKey: 'petId',
          targetKey: 'id',
          onDelete: 'CASCADE',
       })

@@ -47,8 +47,15 @@ module.exports = class Pet extends Sequelize.Model {
    static associate(db) {
       // userId를 User 테이블의 id와 연결
       Pet.belongsTo(db.User, {
+         as: 'user',
          foreignKey: 'userId',
          targetKey: 'id',
+         onDelete: 'CASCADE',
+      })
+      Pet.hasMany(db.PetImage, {
+         as: 'images',
+         foreignKey: 'petId',
+         sourceKey: 'id',
          onDelete: 'CASCADE',
       })
    }

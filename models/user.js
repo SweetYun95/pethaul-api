@@ -1,3 +1,4 @@
+// modules/user.js
 const Sequelize = require('sequelize')
 
 module.exports = class User extends Sequelize.Model {
@@ -33,13 +34,27 @@ module.exports = class User extends Sequelize.Model {
                allowNull: false,
                defaultValue: 'USER',
             },
+            phoneNumber: {
+               type: Sequelize.STRING(20),
+               allowNull: true, // 새로 추가된 필드이므로 기존 데이터에 NULL 값이 들어갈 수 있음
+            },
             email: {
                type: Sequelize.STRING(100),
-               allowNull: false, // 이메일은 선택 사항
+               allowNull: true,
                unique: true, // 이메일 중복 방지 (선택 사항)
                validate: {
                   isEmail: true, // Sequelize 내장 이메일 정규식 검증
                },
+            },
+            provider: {
+               type: Sequelize.ENUM('local', 'google'), // ENUM 타입으로 지정
+               allowNull: false,
+               defaultValue: 'local', // 기본값은 local로 설정
+            },
+            tempPasswordExpiresAt: {
+               type: Sequelize.DATE,
+               allowNull: true,
+               comment: '임시 비밀번호 만료 시간',
             },
          },
          {
@@ -62,5 +77,8 @@ module.exports = class User extends Sequelize.Model {
       User.hasOne(db.Cart, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
       User.hasMany(db.Review, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
       User.hasMany(db.Pet, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
+      User.hasMany(db.Like, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
+      User.hasMany(db.Content, { foreignKey: 'authorId', sourceKey: 'id', onDelete: 'SET NULL', onUpdate: 'CASCADE' })
+      User.hasMany(db.Qna, { foreignKey: 'userId', sourceKey: 'id', onDelete: 'CASCADE' })
    }
 }

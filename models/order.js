@@ -9,7 +9,13 @@ module.exports = class Order extends Sequelize.Model {
                allowNull: false,
             },
             orderStatus: {
-               type: Sequelize.ENUM('ORDER', 'CANCEL'),
+               type: Sequelize.ENUM('ORDER', 'READY', 'SHIPPED', 'DELIVERED', 'CANCEL'),
+               /* ORDER: 주문 
+               READY: 배송 준비
+               SHIPPED: 배송 중
+               DELIVERED: 배송 완료
+               CANCEL: 주문 취소
+               */
                allowNull: false,
             },
          },

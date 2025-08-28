@@ -1,3 +1,4 @@
+// models/domain.js
 const Sequelize = require('sequelize')
 
 module.exports = class Domain extends Sequelize.Model {
@@ -26,6 +27,6 @@ module.exports = class Domain extends Sequelize.Model {
       )
    }
    static associate(db) {
-      Domain.belongsTo(db.User, { foreignKey: 'userId', targetKey: 'id', onDelete:'CASCADE'})
+      Domain.belongsTo(db.User, { foreignKey: 'userId', targetKey: 'id', onDelete: 'CASCADE' })
    }
 }
