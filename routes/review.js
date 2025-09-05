@@ -205,41 +205,39 @@ router.get('/', isLoggedIn, async (req, res, next) => {
    }
 })
 
-
 router.get('/latest', async (req, res, next) => {
-  try {
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1)
-    const size = Math.max(1, parseInt(req.query.size, 10) || 6)
-    const offset = (page - 1) * size
+   try {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+      const size = Math.max(1, parseInt(req.query.size, 10) || 6)
+      const offset = (page - 1) * size
 
-    const { rows, count } = await Review.findAndCountAll({
-      include: [
-        { model: ReviewImage }, 
-        { model: User, attributes: ['id', 'name'] },
-        {
-          model: Item,
-          attributes: ['id', 'itemNm', 'price'],
-          // 아이템 이미지 1장만 원하면 별도(hasMany) include에 separate + limit
-          include: [{ model: ItemImage, separate: true, limit: 1 }],
-          // alias를 쓰셨다면 { model: ItemImage, as: 'ItemImages', separate: true, limit: 1 }
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-      limit: size,
-      offset,
-    })
+      const { rows, count } = await Review.findAndCountAll({
+         include: [
+            { model: ReviewImage },
+            { model: User, attributes: ['id', 'name'] },
+            {
+               model: Item,
+               attributes: ['id', 'itemNm', 'price'],
+               // 아이템 이미지 1장만 원하면 별도(hasMany) include에 separate + limit
+               include: [{ model: ItemImage, separate: true, limit: 1 }],
+               // alias를 쓰셨다면 { model: ItemImage, as: 'ItemImages', separate: true, limit: 1 }
+            },
+         ],
+         order: [['createdAt', 'DESC']],
+         limit: size,
+         offset,
+      })
 
-    res.json({
-      list: rows.map((r) => r.get({ plain: true })), // 순수 객체로 변환
-      page,
-      size,
-      total: count,
-      hasMore: page * size < count,
-    })
-  } catch (err) {
-    next(err)
-  }
+      res.json({
+         list: rows.map((r) => r.get({ plain: true })), // 순수 객체로 변환
+         page,
+         size,
+         total: count,
+         hasMore: page * size < count,
+      })
+   } catch (err) {
+      next(err)
+   }
 })
-
 
 module.exports = router

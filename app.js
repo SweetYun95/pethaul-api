@@ -8,7 +8,7 @@ const passport = require('passport')
 require('dotenv').config()
 const cors = require('cors')
 const fs = require('fs')
-
+const { swaggerUi, swaggerSpec } = require('./swagger')
 // Routers
 const indexRouter = require('./routes/index')
 const authRouter = require('./routes/auth')
@@ -44,6 +44,7 @@ sequelize
    })
 
 // Middleware
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 app.use(
    cors({
       origin: process.env.FRONTEND_APP_URL, // e.g. http://localhost:5173
