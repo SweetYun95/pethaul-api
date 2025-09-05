@@ -33,7 +33,6 @@ router.get('/me', isLoggedIn, async (req, res, next) => {
    }
 })
 
-
 router.get('/ids', isLoggedIn, async (req, res, next) => {
    try {
       const rows = await Like.findAll({

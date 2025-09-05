@@ -93,6 +93,7 @@ router.put('/update/:itemId', isLoggedIn, async (req, res, next) => {
 })
 
 // 장바구니 항목 삭제
+
 router.delete('/delete/:itemId', isLoggedIn, async (req, res, next) => {
    try {
       const { itemId } = req.params
